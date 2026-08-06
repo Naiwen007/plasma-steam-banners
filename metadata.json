@@ -1,0 +1,20 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "you@example.com",
+                "Name": "You"
+            }
+        ],
+        "Category": "Games",
+        "Description": "Launch Steam games using SteamGridDB banners.",
+        "EnabledByDefault": true,
+        "Icon": "steam",
+        "Id": "com.new.steambanners",
+        "License": "GPL-3.0",
+        "Name": "Steam Banners",
+        "Version": "0.1"
+    },
+    "KPackageStructure": "Plasma/Applet",
+    "X-Plasma-API-Minimum-Version": "6.0"
+}
