@@ -1,0 +1,7 @@
+processplugin/build/
+*.o
+*.so
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile

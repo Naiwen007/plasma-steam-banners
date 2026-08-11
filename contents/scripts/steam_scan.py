@@ -2,160 +2,172 @@
 
 import json
 import os
-import re
+import subprocess
+import sys
+import urllib.request
+import urllib.parse
 from pathlib import Path
 
 
-def find_steam_root():
-    """
-    Returns the Steam installation directory containing steamapps/.
-    """
+SCRIPT_DIR = Path(__file__).resolve().parent
+ORIGINAL_SCANNER = SCRIPT_DIR / "steam_scan_original.py"
 
-    candidates = [
-        Path.home() / ".local/share/Steam",
-        Path.home() / ".steam/steam",
-        Path.home() / ".var/app/com.valvesoftware.Steam/.local/share/Steam",
-    ]
+DATA_DIR = SCRIPT_DIR.parent / "data"
+BANNER_DIR = DATA_DIR / "banners"
+KEY_FILE = Path.home() / ".config" / "steambanners" / "steamgriddb.key"
 
-    for path in candidates:
-        if (path / "steamapps/libraryfolders.vdf").exists():
-            return path
+API_BASE = "https://www.steamgriddb.com/api/v2"
+
+
+def load_api_key():
+    try:
+        return KEY_FILE.read_text().strip()
+    except Exception as e:
+        print(
+            f"SteamGridDB API key could not be read: {e}",
+            file=sys.stderr
+        )
+        return None
+
+
+def run_original_scanner():
+    try:
+        result = subprocess.run(
+            [sys.executable, str(ORIGINAL_SCANNER)],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+        return json.loads(result.stdout)
+
+    except Exception as e:
+        print(
+            f"Original Steam scanner failed: {e}",
+            file=sys.stderr
+        )
+        return []
+
+
+def get_grid_url(appid, api_key):
+    url = f"{API_BASE}/grids/steam/{appid}"
+
+    params = urllib.parse.urlencode({
+        "dimensions": "920x430,460x215",
+        "limit": "1"
+    })
+
+    request = urllib.request.Request(
+        f"{url}?{params}",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "User-Agent": "Steam-Banners/0.1"
+        }
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            data = json.loads(response.read().decode("utf-8"))
+
+        if data.get("success") and data.get("data"):
+            return data["data"][0].get("url")
+
+    except Exception as e:
+        print(
+            f"SteamGridDB request failed for {appid}: {e}",
+            file=sys.stderr
+        )
 
     return None
 
 
-def parse_simple_vdf(filename):
-    data = {}
+def download_image(url, appid):
+    if not url:
+        return None
 
-    with open(filename, encoding="utf-8", errors="ignore") as f:
-        inside_appstate = False
+    BANNER_DIR.mkdir(parents=True, exist_ok=True)
 
-        for line in f:
-            line = line.strip()
+    suffix = Path(
+        urllib.parse.urlparse(url).path
+    ).suffix.lower()
 
-            if line == '"AppState"':
-                inside_appstate = True
-                continue
+    if suffix not in [".jpg", ".jpeg", ".png", ".webp"]:
+        suffix = ".jpg"
 
-            if inside_appstate:
+    output = BANNER_DIR / f"{appid}{suffix}"
 
-                if line.startswith("}"):
-                    break
+    if output.exists() and output.stat().st_size > 0:
+        return str(output)
 
-                match = re.match(r'"([^"]+)"\s+"([^"]*)"', line)
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Steam-Banners/0.1"
+        }
+    )
 
-                if match:
-                    key, value = match.groups()
-                    data[key] = value
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            image_data = response.read()
 
-    return data
+        output.write_bytes(image_data)
 
+        return str(output)
 
-def find_libraries(steam_root):
-    """
-    Returns every Steam library path.
-    """
+    except Exception as e:
+        print(
+            f"Image download failed for {appid}: {e}",
+            file=sys.stderr
+        )
 
-    libraries = []
-
-    vdf = steam_root / "steamapps/libraryfolders.vdf"
-
-    with open(vdf, encoding="utf-8", errors="ignore") as f:
-
-        current_path = None
-
-        for line in f:
-
-            m = re.search(r'"path"\s+"([^"]+)"', line)
-
-            if m:
-                current_path = Path(m.group(1))
-
-                if current_path.exists():
-                    libraries.append(current_path)
-
-    return libraries
-
-
-def scan_games(libraries):
-
-    games = []
-
-    for library in libraries:
-
-        steamapps = library / "steamapps"
-
-        if not steamapps.exists():
-            continue
-
-        for manifest in steamapps.glob("appmanifest_*.acf"):
-
-            app = parse_simple_vdf(manifest)
-
-            if "appid" not in app:
-                continue
-
-            name = app.get("name", "Unknown")
-
-            ignored_keywords = [
-                "Proton",
-                "Steam Linux Runtime",
-                "Steamworks Common Redistributables",
-                "Steam Runtime",
-                "Proton Experimental",
-                "Proton Hotfix",
-                "Steam Shader Pre-Caching",
-                "SteamVR"
-            ]
-
-            if any(keyword.lower() in name.lower() for keyword in ignored_keywords):
-                continue
-
-            games.append(
-                {
-                    "appid": int(app["appid"]),
-                    "name": name,
-                    "library": str(library),
-                    "manifest": str(manifest),
-                }
-            )
-
-    games.sort(key=lambda g: g["name"].lower())
-
-    return games
+        return None
 
 
 def main():
+    games = run_original_scanner()
 
-    steam = find_steam_root()
-
-    if steam is None:
+    if not games:
+        print("[]")
         return
 
-    libraries = find_libraries(steam)
+    api_key = load_api_key()
 
-    games = scan_games(libraries)
+    if not api_key:
+        print(
+            "SteamGridDB API key missing. Returning games without images.",
+            file=sys.stderr
+        )
+        print(json.dumps(games, ensure_ascii=False))
+        return
 
-    data_dir = (
-        Path.home()
-        / ".local/share/plasma/plasmoids/com.new.steambanners/contents/data"
-    )
+    for index, game in enumerate(games, start=1):
+        appid = game.get("appid")
+        name = game.get("name", "Unknown")
 
-    data_dir.mkdir(
-        parents=True,
-        exist_ok=True
-    )
+        print(
+            f"SteamGridDB: {index}/{len(games)} - {name}",
+            file=sys.stderr
+        )
 
-    cache_file = data_dir / "games.json"
+        if not appid:
+            continue
 
-    with open(cache_file, "w", encoding="utf-8") as f:
-        json.dump(
+        grid_url = get_grid_url(appid, api_key)
+
+        if grid_url:
+            image_path = download_image(grid_url, appid)
+
+            if image_path:
+                game["image"] = image_path
+                game["imageUrl"] = grid_url
+
+    print(
+        json.dumps(
             games,
-            f,
-            indent=4,
             ensure_ascii=False
-            )
-    print(json.dumps(games, ensure_ascii=False))
+        )
+    )
+
 
 if __name__ == "__main__":
     main()

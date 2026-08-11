@@ -1,37 +1,30 @@
 import QtQuick
-import QtQuick.Controls
 import org.kde.plasma.plasmoid
 
 PlasmoidItem {
+    implicitWidth: 600
+    implicitHeight: 500
 
-    implicitWidth: 400
-    implicitHeight: 400
+    SteamScanner {
+        id: scanner
 
-    Text {
-        anchors.centerIn: parent
-        color: "white"
-        text: "Testar JSON..."
+        onScanFinished: {
+            console.log("### SCAN FINISHED ###")
+            console.log("Games:", scanner.games.length)
+        }
+    }
+
+    GameGrid {
+        id: gameGrid
+
+        anchors.fill: parent
+        anchors.margins: 10
+
+        model: scanner.games
     }
 
     Component.onCompleted: {
-
-        var xhr = new XMLHttpRequest()
-
-        xhr.onreadystatechange = function() {
-
-            if (xhr.readyState === XMLHttpRequest.DONE) {
-
-                console.log("STATUS:", xhr.status)
-                console.log("DATA:", xhr.responseText)
-
-            }
-        }
-
-        xhr.open(
-            "GET",
-            Qt.resolvedUrl("../data/games.json")
-        )
-
-        xhr.send()
+        console.log("### MAIN QML LOADED ###")
+        scanner.scan()
     }
 }
