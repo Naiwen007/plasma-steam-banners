@@ -5,6 +5,7 @@ import org.kde.kirigami as Kirigami
 Kirigami.FormLayout {
     property alias cfg_columns: columnsSpinBox.value
     property alias cfg_cardHeight: cardHeightSpinBox.value
+    property alias cfg_sortMode: sortCombo.currentIndex
 
     QQC2.SpinBox {
         id: columnsSpinBox
@@ -31,5 +32,16 @@ Kirigami.FormLayout {
         valueFromText: function(text) {
             return parseInt(text)
         }
+    }
+
+    QQC2.ComboBox {
+        id: sortCombo
+
+        Kirigami.FormData.label: i18n("Sortering:")
+
+        model: [
+            i18n("Alfabetiskt (A–Ö)"),
+            i18n("Favoriter först")
+        ]
     }
 }

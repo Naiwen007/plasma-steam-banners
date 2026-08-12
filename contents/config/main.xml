@@ -22,5 +22,12 @@
             <label>Favoriter</label>
             <default></default>
         </entry>
+
+        <entry name="sortMode" type="Int">
+            <label>Sortering</label>
+            <default>0</default>
+            <min>0</min>
+            <max>1</max>
+        </entry>
     </group>
 </kcfg>

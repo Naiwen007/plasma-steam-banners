@@ -9,65 +9,108 @@ GridView {
 
     property int columns: 2
     property int cardHeight: 120
+    property int sortMode: 0
 
-    property var favorites: ({})
+    property var games: []
     property string favoritesString: ""
+    property var sortedGames: []
 
     cellWidth: width / columns
     cellHeight: cardHeight + 10
 
-    model: []
+    model: sortedGames
+
+    function favoriteIds() {
+        if (!favoritesString || favoritesString === "") {
+            return []
+        }
+
+        return favoritesString
+            .split(",")
+            .filter(function(id) {
+                return id !== ""
+            })
+    }
 
     function isFavorite(appid) {
-        return favorites[String(appid)] === true
-    }
-
-    function loadFavorites() {
-        var result = {}
-
-        if (favoritesString !== "") {
-            var ids = favoritesString.split(",")
-
-            for (var i = 0; i < ids.length; ++i) {
-                if (ids[i] !== "") {
-                    result[ids[i]] = true
-                }
-            }
-        }
-
-        favorites = result
-    }
-
-    function saveFavorites() {
-        var ids = []
-
-        for (var key in favorites) {
-            if (favorites[key] === true) {
-                ids.push(key)
-            }
-        }
-
-        ids.sort()
-        favoritesString = ids.join(",")
+        return favoriteIds().indexOf(String(appid)) !== -1
     }
 
     function toggleFavorite(appid) {
         var key = String(appid)
-        var copy = Object.assign({}, favorites)
+        var ids = favoriteIds()
+        var index = ids.indexOf(key)
 
-        if (copy[key] === true) {
-            delete copy[key]
+        if (index !== -1) {
+            ids.splice(index, 1)
         } else {
-            copy[key] = true
+            ids.push(key)
         }
 
-        favorites = copy
-        saveFavorites()
+        ids.sort()
+        favoritesString = ids.join(",")
+
+        rebuildModel()
     }
 
-    onFavoritesStringChanged: loadFavorites()
+    function compareNames(a, b) {
+        var nameA = (a.name || "").toLowerCase()
+        var nameB = (b.name || "").toLowerCase()
 
-    Component.onCompleted: loadFavorites()
+        if (nameA < nameB) {
+            return -1
+        }
+
+        if (nameA > nameB) {
+            return 1
+        }
+
+        return 0
+    }
+
+    function rebuildModel() {
+        var result = []
+
+        if (!games) {
+            sortedGames = result
+            return
+        }
+
+        for (var i = 0; i < games.length; ++i) {
+            result.push(games[i])
+        }
+
+        result.sort(function(a, b) {
+            if (sortMode === 1) {
+                var favoriteA = isFavorite(a.appid)
+                var favoriteB = isFavorite(b.appid)
+
+                if (favoriteA && !favoriteB) {
+                    return -1
+                }
+
+                if (!favoriteA && favoriteB) {
+                    return 1
+                }
+            }
+
+            return compareNames(a, b)
+        })
+
+        sortedGames = result
+
+        console.log(
+            "### SORTED:",
+            "mode=" + sortMode,
+            "favorites=" + favoritesString
+        )
+    }
+
+    onGamesChanged: rebuildModel()
+    onSortModeChanged: rebuildModel()
+    onFavoritesStringChanged: rebuildModel()
+
+    Component.onCompleted: rebuildModel()
 
     Process {
         id: launcher
@@ -109,7 +152,6 @@ GridView {
                 : (mouseArea.containsMouse ? "#777777" : "#444444")
 
             border.width: grid.isFavorite(modelData.appid) ? 2 : 1
-
             clip: true
 
             Behavior on color {
@@ -193,7 +235,6 @@ GridView {
                 id: mouseArea
 
                 anchors.fill: parent
-
                 hoverEnabled: true
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 cursorShape: Qt.PointingHandCursor

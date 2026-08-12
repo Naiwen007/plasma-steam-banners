@@ -20,9 +20,11 @@ PlasmoidItem {
         anchors.fill: parent
         anchors.margins: 10
 
-        model: scanner.games
+        games: scanner.games
+
         columns: Math.max(1, plasmoid.configuration.columns || 2)
         cardHeight: Math.max(80, plasmoid.configuration.cardHeight || 120)
+        sortMode: plasmoid.configuration.sortMode || 0
 
         favoritesString: plasmoid.configuration.favorites || ""
 
