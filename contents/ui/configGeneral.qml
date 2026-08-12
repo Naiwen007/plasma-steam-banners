@@ -37,11 +37,12 @@ Kirigami.FormLayout {
     QQC2.ComboBox {
         id: sortCombo
 
-        Kirigami.FormData.label: i18n("Sortering:")
+        Kirigami.FormData.label: i18n("Visning:")
 
         model: [
             i18n("Alfabetiskt (A–Ö)"),
-            i18n("Favoriter först")
+            i18n("Favoriter först"),
+            i18n("Endast favoriter")
         ]
     }
 }

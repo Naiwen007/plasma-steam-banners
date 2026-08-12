@@ -77,7 +77,13 @@ GridView {
         }
 
         for (var i = 0; i < games.length; ++i) {
-            result.push(games[i])
+            var game = games[i]
+
+            if (sortMode === 2 && !isFavorite(game.appid)) {
+                continue
+            }
+
+            result.push(game)
         }
 
         result.sort(function(a, b) {
@@ -100,9 +106,10 @@ GridView {
         sortedGames = result
 
         console.log(
-            "### SORTED:",
+            "### MODEL UPDATED:",
             "mode=" + sortMode,
-            "favorites=" + favoritesString
+            "favorites=" + favoritesString,
+            "games=" + result.length
         )
     }
 
