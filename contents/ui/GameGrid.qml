@@ -1,4 +1,5 @@
 import QtQuick
+import SteamBanners.Process
 
 GridView {
     id: grid
@@ -13,16 +14,30 @@ GridView {
 
     model: []
 
+    Process {
+        id: launcher
+
+        onErrorOccurred: function(error) {
+            console.log("### STEAM LAUNCH ERROR:", error)
+        }
+
+        onFinished: function(exitCode) {
+            console.log("### STEAM LAUNCH FINISHED:", exitCode)
+        }
+    }
+
     delegate: Item {
         width: grid.cellWidth - 10
         height: grid.cardHeight
 
         Rectangle {
+            id: card
+
             anchors.fill: parent
 
             radius: 8
-            color: "#202020"
-            border.color: "#444444"
+            color: mouseArea.containsMouse ? "#303030" : "#202020"
+            border.color: mouseArea.containsMouse ? "#777777" : "#444444"
             border.width: 1
             clip: true
 
@@ -56,6 +71,27 @@ GridView {
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
                 wrapMode: Text.Wrap
+            }
+
+            MouseArea {
+                id: mouseArea
+
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+
+                onClicked: {
+                    console.log(
+                        "### LAUNCHING:",
+                        modelData.name,
+                        modelData.appid
+                    )
+
+                    launcher.start(
+                        "steam",
+                        ["steam://rungameid/" + modelData.appid]
+                    )
+                }
             }
         }
     }
