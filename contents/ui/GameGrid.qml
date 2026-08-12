@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls as QQC2
 import SteamBanners.Process
 
 GridView {
@@ -27,8 +28,19 @@ GridView {
     }
 
     delegate: Item {
+        id: delegateRoot
+
         width: grid.cellWidth - 10
         height: grid.cardHeight
+
+        scale: mouseArea.pressed ? 0.97 : 1.0
+
+        Behavior on scale {
+            NumberAnimation {
+                duration: 80
+                easing.type: Easing.OutQuad
+            }
+        }
 
         Rectangle {
             id: card
@@ -40,6 +52,18 @@ GridView {
             border.color: mouseArea.containsMouse ? "#777777" : "#444444"
             border.width: 1
             clip: true
+
+            Behavior on color {
+                ColorAnimation {
+                    duration: 120
+                }
+            }
+
+            Behavior on border.color {
+                ColorAnimation {
+                    duration: 120
+                }
+            }
 
             Image {
                 id: gameLogo
@@ -92,6 +116,12 @@ GridView {
                         ["steam://rungameid/" + modelData.appid]
                     )
                 }
+            }
+
+            QQC2.ToolTip {
+                visible: mouseArea.containsMouse
+                delay: 600
+                text: modelData.name
             }
         }
     }
