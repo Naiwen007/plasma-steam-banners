@@ -104,13 +104,6 @@ GridView {
         })
 
         sortedGames = result
-
-        console.log(
-            "### MODEL UPDATED:",
-            "mode=" + sortMode,
-            "favorites=" + favoritesString,
-            "games=" + result.length
-        )
     }
 
     onGamesChanged: rebuildModel()
@@ -152,20 +145,13 @@ GridView {
             anchors.fill: parent
 
             radius: 8
-            color: mouseArea.containsMouse ? "#303030" : "#202020"
-
+            color: "#151515"
             border.color: grid.isFavorite(modelData.appid)
                 ? "#d6a400"
                 : (mouseArea.containsMouse ? "#777777" : "#444444")
 
             border.width: grid.isFavorite(modelData.appid) ? 2 : 1
             clip: true
-
-            Behavior on color {
-                ColorAnimation {
-                    duration: 120
-                }
-            }
 
             Behavior on border.color {
                 ColorAnimation {
@@ -174,17 +160,49 @@ GridView {
             }
 
             Image {
+                id: heroImage
+
+                anchors.fill: parent
+
+                visible: modelData.hero !== undefined
+                         && modelData.hero !== null
+                         && modelData.hero !== ""
+
+                source: visible
+                    ? "file://" + modelData.hero
+                    : ""
+
+                fillMode: Image.PreserveAspectCrop
+                asynchronous: true
+                cache: true
+            }
+
+            Rectangle {
+                anchors.fill: parent
+
+                color: mouseArea.containsMouse
+                    ? "#52000000"
+                    : "#70000000"
+
+                Behavior on color {
+                    ColorAnimation {
+                        duration: 120
+                    }
+                }
+            }
+
+            Image {
                 id: gameLogo
 
                 anchors.fill: parent
-                anchors.margins: 12
+                anchors.margins: 14
 
-                visible: modelData.image !== undefined
-                         && modelData.image !== null
-                         && modelData.image !== ""
+                visible: modelData.logo !== undefined
+                         && modelData.logo !== null
+                         && modelData.logo !== ""
 
                 source: visible
-                    ? "file://" + modelData.image
+                    ? "file://" + modelData.logo
                     : ""
 
                 fillMode: Image.PreserveAspectFit
@@ -194,12 +212,15 @@ GridView {
 
             Text {
                 anchors.centerIn: parent
-                width: parent.width - 20
+                width: parent.width - 24
 
                 visible: !gameLogo.visible
 
                 color: "white"
                 text: modelData.name
+
+                font.pixelSize: 18
+                font.bold: true
 
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
@@ -228,12 +249,6 @@ GridView {
 
                     onTriggered: {
                         grid.toggleFavorite(modelData.appid)
-
-                        console.log(
-                            "### FAVORITE:",
-                            modelData.name,
-                            grid.isFavorite(modelData.appid)
-                        )
                     }
                 }
             }
@@ -253,12 +268,6 @@ GridView {
                     }
 
                     if (mouse.button === Qt.LeftButton) {
-                        console.log(
-                            "### LAUNCHING:",
-                            modelData.name,
-                            modelData.appid
-                        )
-
                         launcher.start(
                             "steam",
                             ["steam://rungameid/" + modelData.appid]

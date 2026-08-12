@@ -5,11 +5,11 @@ QtObject {
     id: scanner
 
     property var games: []
+    property bool scanning: false
 
     property Process process: Process {
         onOutputReady: function(output) {
             console.log("### PROCESS OUTPUT ###")
-            console.log(output)
 
             try {
                 scanner.games = JSON.parse(output)
@@ -22,17 +22,25 @@ QtObject {
 
         onErrorOccurred: function(error) {
             console.log("### PROCESS ERROR:", error)
+            scanner.scanning = false
         }
 
         onFinished: function(exitCode) {
             console.log("### PROCESS FINISHED:", exitCode)
+            scanner.scanning = false
         }
     }
 
     signal scanFinished()
 
     function scan() {
+        if (scanning) {
+            console.log("### SCAN ALREADY RUNNING ###")
+            return
+        }
+
         console.log("### STARTING STEAM SCAN ###")
+        scanning = true
 
         process.start(
             "python3",

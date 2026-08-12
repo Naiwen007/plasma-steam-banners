@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 
 import json
-import os
 import subprocess
 import sys
-import urllib.request
 import urllib.parse
+import urllib.request
 from pathlib import Path
 
 
@@ -14,6 +13,8 @@ ORIGINAL_SCANNER = SCRIPT_DIR / "steam_scan_original.py"
 
 DATA_DIR = SCRIPT_DIR.parent / "data"
 LOGO_DIR = DATA_DIR / "logos"
+HERO_DIR = DATA_DIR / "heroes"
+
 KEY_FILE = Path.home() / ".config" / "steambanners" / "steamgriddb.key"
 
 API_BASE = "https://www.steamgriddb.com/api/v2"
@@ -48,59 +49,96 @@ def run_original_scanner():
         )
         return []
 
-def get_logo_url(appid, api_key):
-    game_url = f"{API_BASE}/games/steam/{appid}"
 
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "User-Agent": "Steam-Banners/0.1"
-    }
+def api_request(url, api_key):
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "User-Agent": "Steam-Banners/0.1"
+        }
+    )
 
+    with urllib.request.urlopen(request, timeout=15) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def get_sgdb_game_id(appid, api_key):
     try:
-        request = urllib.request.Request(
-            game_url,
-            headers=headers
+        data = api_request(
+            f"{API_BASE}/games/steam/{appid}",
+            api_key
         )
 
-        with urllib.request.urlopen(request, timeout=15) as response:
-            game_data = json.loads(response.read().decode("utf-8"))
-
-        if not game_data.get("success") or not game_data.get("data"):
-            return None
-
-        sgdb_id = game_data["data"]["id"]
-
-        logo_url = f"{API_BASE}/logos/game/{sgdb_id}"
-
-        params = urllib.parse.urlencode({
-            "limit": "1"
-        })
-
-        request = urllib.request.Request(
-            f"{logo_url}?{params}",
-            headers=headers
-        )
-
-        with urllib.request.urlopen(request, timeout=15) as response:
-            logo_data = json.loads(response.read().decode("utf-8"))
-
-        if logo_data.get("success") and logo_data.get("data"):
-            return logo_data["data"][0].get("url")
+        if data.get("success") and data.get("data"):
+            return data["data"]["id"]
 
     except Exception as e:
         print(
-            f"SteamGridDB logo request failed for {appid}: {e}",
+            f"SteamGridDB game lookup failed for {appid}: {e}",
             file=sys.stderr
         )
 
     return None
 
 
-def download_image(url, appid):
+def get_logo_url(sgdb_id, api_key):
+    if not sgdb_id:
+        return None
+
+    try:
+        params = urllib.parse.urlencode({
+            "limit": "1"
+        })
+
+        data = api_request(
+            f"{API_BASE}/logos/game/{sgdb_id}?{params}",
+            api_key
+        )
+
+        if data.get("success") and data.get("data"):
+            return data["data"][0].get("url")
+
+    except Exception as e:
+        print(
+            f"SteamGridDB logo request failed for game {sgdb_id}: {e}",
+            file=sys.stderr
+        )
+
+    return None
+
+
+def get_hero_url(sgdb_id, api_key):
+    if not sgdb_id:
+        return None
+
+    try:
+        params = urllib.parse.urlencode({
+            "limit": "1"
+        })
+
+        data = api_request(
+            f"{API_BASE}/heroes/game/{sgdb_id}?{params}",
+            api_key
+        )
+
+        if data.get("success") and data.get("data"):
+            return data["data"][0].get("url")
+
+    except Exception as e:
+        print(
+            f"SteamGridDB hero request failed for game {sgdb_id}: {e}",
+            file=sys.stderr
+        )
+
+    return None
+
+
+def download_image(url, appid, target_dir):
     if not url:
         return None
 
-    LOGO_DIR.mkdir(parents=True, exist_ok=True)
+    target_dir.mkdir(parents=True, exist_ok=True)
 
     suffix = Path(
         urllib.parse.urlparse(url).path
@@ -109,7 +147,7 @@ def download_image(url, appid):
     if suffix not in [".jpg", ".jpeg", ".png", ".webp"]:
         suffix = ".jpg"
 
-    output = LOGO_DIR / f"{appid}{suffix}"
+    output = target_dir / f"{appid}{suffix}"
 
     if output.exists() and output.stat().st_size > 0:
         return str(output)
@@ -152,7 +190,14 @@ def main():
             "SteamGridDB API key missing. Returning games without images.",
             file=sys.stderr
         )
-        print(json.dumps(games, ensure_ascii=False))
+
+        print(
+            json.dumps(
+                games,
+                ensure_ascii=False
+            )
+        )
+
         return
 
     for index, game in enumerate(games, start=1):
@@ -167,14 +212,36 @@ def main():
         if not appid:
             continue
 
-        logo_url = get_logo_url(appid, api_key)
+        sgdb_id = get_sgdb_game_id(appid, api_key)
+
+        if not sgdb_id:
+            continue
+
+        logo_url = get_logo_url(sgdb_id, api_key)
 
         if logo_url:
-            image_path = download_image(logo_url, appid)
+            logo_path = download_image(
+                logo_url,
+                appid,
+                LOGO_DIR
+            )
 
-            if image_path:
-                game["image"] = image_path
-                game["imageUrl"] = logo_url
+            if logo_path:
+                game["logo"] = logo_path
+                game["logoUrl"] = logo_url
+
+        hero_url = get_hero_url(sgdb_id, api_key)
+
+        if hero_url:
+            hero_path = download_image(
+                hero_url,
+                appid,
+                HERO_DIR
+            )
+
+            if hero_path:
+                game["hero"] = hero_path
+                game["heroUrl"] = hero_url
 
     print(
         json.dumps(
