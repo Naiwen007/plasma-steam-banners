@@ -17,5 +17,10 @@
             <min>80</min>
             <max>300</max>
         </entry>
+
+        <entry name="favorites" type="String">
+            <label>Favoriter</label>
+            <default></default>
+        </entry>
     </group>
 </kcfg>

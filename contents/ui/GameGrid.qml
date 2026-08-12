@@ -10,10 +10,64 @@ GridView {
     property int columns: 2
     property int cardHeight: 120
 
+    property var favorites: ({})
+    property string favoritesString: ""
+
     cellWidth: width / columns
     cellHeight: cardHeight + 10
 
     model: []
+
+    function isFavorite(appid) {
+        return favorites[String(appid)] === true
+    }
+
+    function loadFavorites() {
+        var result = {}
+
+        if (favoritesString !== "") {
+            var ids = favoritesString.split(",")
+
+            for (var i = 0; i < ids.length; ++i) {
+                if (ids[i] !== "") {
+                    result[ids[i]] = true
+                }
+            }
+        }
+
+        favorites = result
+    }
+
+    function saveFavorites() {
+        var ids = []
+
+        for (var key in favorites) {
+            if (favorites[key] === true) {
+                ids.push(key)
+            }
+        }
+
+        ids.sort()
+        favoritesString = ids.join(",")
+    }
+
+    function toggleFavorite(appid) {
+        var key = String(appid)
+        var copy = Object.assign({}, favorites)
+
+        if (copy[key] === true) {
+            delete copy[key]
+        } else {
+            copy[key] = true
+        }
+
+        favorites = copy
+        saveFavorites()
+    }
+
+    onFavoritesStringChanged: loadFavorites()
+
+    Component.onCompleted: loadFavorites()
 
     Process {
         id: launcher
@@ -49,8 +103,13 @@ GridView {
 
             radius: 8
             color: mouseArea.containsMouse ? "#303030" : "#202020"
-            border.color: mouseArea.containsMouse ? "#777777" : "#444444"
-            border.width: 1
+
+            border.color: grid.isFavorite(modelData.appid)
+                ? "#d6a400"
+                : (mouseArea.containsMouse ? "#777777" : "#444444")
+
+            border.width: grid.isFavorite(modelData.appid) ? 2 : 1
+
             clip: true
 
             Behavior on color {
@@ -92,29 +151,71 @@ GridView {
 
                 color: "white"
                 text: modelData.name
+
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
                 wrapMode: Text.Wrap
+            }
+
+            Text {
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.margins: 8
+
+                visible: grid.isFavorite(modelData.appid)
+
+                text: "★"
+                color: "#ffd54a"
+                font.pixelSize: 18
+            }
+
+            QQC2.Menu {
+                id: contextMenu
+
+                QQC2.MenuItem {
+                    text: grid.isFavorite(modelData.appid)
+                        ? i18n("Ta bort från favoriter")
+                        : i18n("Markera som favorit")
+
+                    onTriggered: {
+                        grid.toggleFavorite(modelData.appid)
+
+                        console.log(
+                            "### FAVORITE:",
+                            modelData.name,
+                            grid.isFavorite(modelData.appid)
+                        )
+                    }
+                }
             }
 
             MouseArea {
                 id: mouseArea
 
                 anchors.fill: parent
+
                 hoverEnabled: true
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
                 cursorShape: Qt.PointingHandCursor
 
-                onClicked: {
-                    console.log(
-                        "### LAUNCHING:",
-                        modelData.name,
-                        modelData.appid
-                    )
+                onClicked: function(mouse) {
+                    if (mouse.button === Qt.RightButton) {
+                        contextMenu.popup()
+                        return
+                    }
 
-                    launcher.start(
-                        "steam",
-                        ["steam://rungameid/" + modelData.appid]
-                    )
+                    if (mouse.button === Qt.LeftButton) {
+                        console.log(
+                            "### LAUNCHING:",
+                            modelData.name,
+                            modelData.appid
+                        )
+
+                        launcher.start(
+                            "steam",
+                            ["steam://rungameid/" + modelData.appid]
+                        )
+                    }
                 }
             }
 

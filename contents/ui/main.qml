@@ -23,6 +23,14 @@ PlasmoidItem {
         model: scanner.games
         columns: Math.max(1, plasmoid.configuration.columns || 2)
         cardHeight: Math.max(80, plasmoid.configuration.cardHeight || 120)
+
+        favoritesString: plasmoid.configuration.favorites || ""
+
+        onFavoritesStringChanged: {
+            if (plasmoid.configuration.favorites !== favoritesString) {
+                plasmoid.configuration.favorites = favoritesString
+            }
+        }
     }
 
     Component.onCompleted: {
