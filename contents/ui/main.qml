@@ -22,6 +22,7 @@ PlasmoidItem {
 
         model: scanner.games
         columns: Math.max(1, plasmoid.configuration.columns || 2)
+        cardHeight: Math.max(80, plasmoid.configuration.cardHeight || 120)
     }
 
     Component.onCompleted: {

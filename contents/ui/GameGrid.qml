@@ -6,15 +6,16 @@ GridView {
     clip: true
 
     property int columns: 2
+    property int cardHeight: 120
 
     cellWidth: width / columns
-    cellHeight: cellWidth * 0.62
+    cellHeight: cardHeight + 10
 
     model: []
 
     delegate: Rectangle {
         width: grid.cellWidth - 10
-        height: grid.cellHeight - 10
+        height: grid.cardHeight
 
         radius: 8
         color: "#202020"
