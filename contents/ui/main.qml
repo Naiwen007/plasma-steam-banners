@@ -21,6 +21,7 @@ PlasmoidItem {
         anchors.margins: 10
 
         model: scanner.games
+        columns: Math.max(1, plasmoid.configuration.columns || 2)
     }
 
     Component.onCompleted: {
