@@ -5,3 +5,13 @@ CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
 Makefile
+
+# Generated SteamGridDB assets
+contents/data/logos/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Local scanner backup
+contents/scripts/steam_scan_original.py

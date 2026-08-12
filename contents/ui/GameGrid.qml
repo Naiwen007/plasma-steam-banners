@@ -13,24 +13,50 @@ GridView {
 
     model: []
 
-    delegate: Rectangle {
+    delegate: Item {
         width: grid.cellWidth - 10
         height: grid.cardHeight
 
-        radius: 8
-        color: "#202020"
-        border.color: "#444444"
-        border.width: 1
+        Rectangle {
+            anchors.fill: parent
 
-        Text {
-            anchors.centerIn: parent
+            radius: 8
+            color: "#202020"
+            border.color: "#444444"
+            border.width: 1
+            clip: true
 
-            width: parent.width - 20
+            Image {
+                id: gameLogo
 
-            color: "white"
-            text: modelData.name
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.Wrap
+                anchors.fill: parent
+                anchors.margins: 12
+
+                visible: modelData.image !== undefined
+                         && modelData.image !== null
+                         && modelData.image !== ""
+
+                source: visible
+                    ? "file://" + modelData.image
+                    : ""
+
+                fillMode: Image.PreserveAspectFit
+                asynchronous: true
+                cache: true
+            }
+
+            Text {
+                anchors.centerIn: parent
+                width: parent.width - 20
+
+                visible: !gameLogo.visible
+
+                color: "white"
+                text: modelData.name
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                wrapMode: Text.Wrap
+            }
         }
     }
 }
