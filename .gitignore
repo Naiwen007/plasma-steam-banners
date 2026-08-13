@@ -18,3 +18,8 @@ contents/data/heroes/
 
 # Local CMake build directories
 build*/
+
+# Generated runtime data
+contents/cache/
+contents/data/banners/
+contents/data/games.json
