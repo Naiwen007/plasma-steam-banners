@@ -12,6 +12,16 @@ PlasmoidItem {
     property bool apiKeyAvailable: true
     property int apiNoticeHeight: apiKeyAvailable ? 0 : 64
 
+    property bool noGamesFound:
+    !scanner.scanning
+    && scanner.games.length === 0
+
+    property bool noFavoritesFound:
+    !scanner.scanning
+    && scanner.games.length > 0
+    && gameGrid.sortMode === 2
+    && gameGrid.sortedGames.length === 0
+
     Process {
         id: apiKeyChecker
 
@@ -177,11 +187,11 @@ PlasmoidItem {
     }
 
     // ============================================================
-    // GAME GRID
+    // CONTENT AREA
     // ============================================================
 
-    GameGrid {
-        id: gameGrid
+    Item {
+        id: contentArea
 
         anchors.top: root.apiKeyAvailable
         ? headerArea.bottom
@@ -196,30 +206,137 @@ PlasmoidItem {
         anchors.rightMargin: 10
         anchors.bottomMargin: 10
 
-        games: scanner.games
+        // ========================================================
+        // GAME GRID
+        // ========================================================
 
-        columns: Math.max(
-            1,
-            plasmoid.configuration.columns || 2
-        )
+        GameGrid {
+            id: gameGrid
 
-        cardHeight: Math.max(
-            80,
-            plasmoid.configuration.cardHeight || 120
-        )
+            anchors.fill: parent
 
-        sortMode: plasmoid.configuration.sortMode || 0
+            games: scanner.games
 
-        favoritesString:
-        plasmoid.configuration.favorites || ""
+            columns: Math.max(
+                1,
+                plasmoid.configuration.columns || 2
+            )
 
-        onFavoritesStringChanged: {
-            if (
-                plasmoid.configuration.favorites
-                !== favoritesString
-            ) {
-                plasmoid.configuration.favorites =
-                favoritesString
+            cardHeight: Math.max(
+                80,
+                plasmoid.configuration.cardHeight || 120
+            )
+
+            sortMode: plasmoid.configuration.sortMode || 0
+
+            favoritesString:
+            plasmoid.configuration.favorites || ""
+
+            onFavoritesStringChanged: {
+                if (
+                    plasmoid.configuration.favorites
+                    !== favoritesString
+                ) {
+                    plasmoid.configuration.favorites =
+                    favoritesString
+                }
+            }
+        }
+
+        // ========================================================
+        // EMPTY STATE
+        // ========================================================
+
+        Item {
+            id: emptyState
+
+            anchors.fill: parent
+
+            visible:
+            root.noGamesFound
+            || root.noFavoritesFound
+
+            Column {
+                anchors.centerIn: parent
+
+                width: Math.min(
+                    parent.width - 40,
+                    420
+                )
+
+                spacing: 10
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+
+                    text: root.noFavoritesFound
+                    ? "★"
+                    : "?"
+
+                    color: root.noFavoritesFound
+                    ? "#ffd34e"
+                    : "#55bce8"
+
+                    font.pixelSize: 34
+                    font.bold: true
+                }
+
+                QQC2.Label {
+                    width: parent.width
+
+                    text: root.noFavoritesFound
+                    ? i18n("No favorite games yet.")
+                    : i18n("No Steam games found.")
+
+                    color: "#eef6fb"
+
+                    font.pixelSize: 18
+                    font.bold: true
+
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                }
+
+                QQC2.Label {
+                    width: parent.width
+
+                    text: root.noFavoritesFound
+                    ? i18n(
+                        "Right-click a game and add it to favorites, or change the View setting."
+                    )
+                    : i18n(
+                        "Make sure Steam is installed and that at least one Steam library can be found."
+                    )
+
+                    color: "#93a9b8"
+
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                }
+
+                QQC2.Button {
+                    anchors.horizontalCenter: parent.horizontalCenter
+
+                    visible: root.noFavoritesFound
+
+                    text: i18n("Open Settings")
+
+                    onClicked: {
+                        plasmoid.internalAction("configure").trigger()
+                    }
+                }
+
+                QQC2.Button {
+                    anchors.horizontalCenter: parent.horizontalCenter
+
+                    visible: root.noGamesFound
+
+                    text: i18n("Scan again")
+
+                    onClicked: {
+                        scanner.scan()
+                    }
+                }
             }
         }
     }
