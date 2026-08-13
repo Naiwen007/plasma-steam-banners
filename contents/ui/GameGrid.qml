@@ -10,6 +10,7 @@ GridView {
     property int columns: 2
     property int cardHeight: 120
     property int sortMode: 0
+    property string searchText: ""
 
     property var games: []
     property string favoritesString: ""
@@ -83,6 +84,15 @@ GridView {
                 continue
             }
 
+            var query = searchText.trim().toLowerCase()
+
+            if (
+                query !== ""
+                && (game.name || "").toLowerCase().indexOf(query) === -1
+            ) {
+                continue
+            }
+
             result.push(game)
         }
 
@@ -109,6 +119,7 @@ GridView {
     onGamesChanged: rebuildModel()
     onSortModeChanged: rebuildModel()
     onFavoritesStringChanged: rebuildModel()
+    onSearchTextChanged: rebuildModel()
 
     Component.onCompleted: rebuildModel()
 

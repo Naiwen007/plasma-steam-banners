@@ -21,6 +21,13 @@ PlasmoidItem {
     && scanner.games.length > 0
     && gameGrid.sortMode === 2
     && gameGrid.sortedGames.length === 0
+    && searchField.text.trim() === ""
+
+    property bool noSearchResults:
+    !scanner.scanning
+    && scanner.games.length > 0
+    && searchField.text.trim() !== ""
+    && gameGrid.sortedGames.length === 0
 
     Process {
         id: apiKeyChecker
@@ -207,15 +214,94 @@ PlasmoidItem {
         anchors.bottomMargin: 10
 
         // ========================================================
+        // SEARCH BAR
+        // ========================================================
+
+        Rectangle {
+            id: searchBar
+
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+
+            height: 40
+
+            radius: 8
+
+            color: "#0c151d"
+
+            border.color: searchField.activeFocus
+            ? "#45b9ee"
+            : "#304859"
+
+            border.width: 1
+
+            Behavior on border.color {
+                ColorAnimation {
+                    duration: 120
+                }
+            }
+
+            QQC2.TextField {
+                id: searchField
+
+                anchors.fill: parent
+
+                anchors.leftMargin: 8
+                anchors.rightMargin: clearSearchButton.visible ? 40 : 8
+
+                placeholderText: i18n("Search games...")
+
+                background: Item {}
+
+                selectByMouse: true
+
+                onAccepted: {
+                    focus = false
+                }
+            }
+
+            QQC2.ToolButton {
+                id: clearSearchButton
+
+                anchors.right: parent.right
+                anchors.rightMargin: 4
+                anchors.verticalCenter: parent.verticalCenter
+
+                width: 32
+                height: 32
+
+                visible: searchField.text !== ""
+
+                text: "×"
+
+                onClicked: {
+                    searchField.clear()
+                    searchField.forceActiveFocus()
+                }
+
+                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.text: i18n("Clear search")
+            }
+        }
+
+        // ========================================================
         // GAME GRID
         // ========================================================
 
         GameGrid {
             id: gameGrid
 
-            anchors.fill: parent
+            anchors.top: searchBar.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+
+            anchors.topMargin: 8
 
             games: scanner.games
+
+            searchText: searchField.text
 
             columns: Math.max(
                 1,
@@ -250,11 +336,17 @@ PlasmoidItem {
         Item {
             id: emptyState
 
-            anchors.fill: parent
+            anchors.top: searchBar.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+
+            anchors.topMargin: 8
 
             visible:
             root.noGamesFound
             || root.noFavoritesFound
+            || root.noSearchResults
 
             Column {
                 anchors.centerIn: parent
@@ -269,11 +361,15 @@ PlasmoidItem {
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
 
-                    text: root.noFavoritesFound
+                    text: root.noSearchResults
+                    ? "⌕"
+                    : root.noFavoritesFound
                     ? "★"
                     : "?"
 
-                    color: root.noFavoritesFound
+                    color: root.noSearchResults
+                    ? "#55bce8"
+                    : root.noFavoritesFound
                     ? "#ffd34e"
                     : "#55bce8"
 
@@ -284,7 +380,9 @@ PlasmoidItem {
                 QQC2.Label {
                     width: parent.width
 
-                    text: root.noFavoritesFound
+                    text: root.noSearchResults
+                    ? i18n("No games match your search.")
+                    : root.noFavoritesFound
                     ? i18n("No favorite games yet.")
                     : i18n("No Steam games found.")
 
@@ -300,7 +398,11 @@ PlasmoidItem {
                 QQC2.Label {
                     width: parent.width
 
-                    text: root.noFavoritesFound
+                    text: root.noSearchResults
+                    ? i18n(
+                        "Try a different game title or clear the search."
+                    )
+                    : root.noFavoritesFound
                     ? i18n(
                         "Right-click a game and add it to favorites, or change the View setting."
                     )
@@ -317,7 +419,9 @@ PlasmoidItem {
                 QQC2.Button {
                     anchors.horizontalCenter: parent.horizontalCenter
 
-                    visible: root.noFavoritesFound
+                    visible:
+                    root.noFavoritesFound
+                    && !root.noSearchResults
 
                     text: i18n("Open Settings")
 
@@ -329,12 +433,27 @@ PlasmoidItem {
                 QQC2.Button {
                     anchors.horizontalCenter: parent.horizontalCenter
 
-                    visible: root.noGamesFound
+                    visible:
+                    root.noGamesFound
+                    && !root.noSearchResults
 
                     text: i18n("Scan again")
 
                     onClicked: {
                         scanner.scan()
+                    }
+                }
+
+                QQC2.Button {
+                    anchors.horizontalCenter: parent.horizontalCenter
+
+                    visible: root.noSearchResults
+
+                    text: i18n("Clear search")
+
+                    onClicked: {
+                        searchField.clear()
+                        searchField.forceActiveFocus()
                     }
                 }
             }
