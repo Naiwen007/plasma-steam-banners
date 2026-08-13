@@ -14,5 +14,7 @@ __pycache__/
 *.pyc
 
 # Local scanner backup
-contents/scripts/steam_scan_original.py
 contents/data/heroes/
+
+# Local CMake build directories
+build*/

@@ -15,7 +15,7 @@ except ImportError:
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-ORIGINAL_SCANNER = SCRIPT_DIR / "steam_scan_original.py"
+ORIGINAL_SCANNER = SCRIPT_DIR / "steam_library_scan.py"
 
 DATA_DIR = SCRIPT_DIR.parent / "data"
 LOGO_DIR = DATA_DIR / "logos"

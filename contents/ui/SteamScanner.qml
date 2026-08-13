@@ -7,6 +7,16 @@ QtObject {
     property var games: []
     property bool scanning: false
 
+    property string scriptPath: {
+        var url = Qt.resolvedUrl("../scripts/steam_scan.py").toString()
+
+        if (url.startsWith("file://")) {
+            url = url.substring(7)
+        }
+
+        return decodeURIComponent(url)
+    }
+
     property Process process: Process {
         onOutputReady: function(output) {
             console.log("### PROCESS OUTPUT ###")
@@ -40,12 +50,14 @@ QtObject {
         }
 
         console.log("### STARTING STEAM SCAN ###")
+        console.log("### SCRIPT:", scriptPath)
+
         scanning = true
 
         process.start(
             "python3",
             [
-                "/var/home/Naiwen/.local/share/plasma/plasmoids/com.new.steambanners/contents/scripts/steam_scan.py"
+                scriptPath
             ]
         )
     }
