@@ -10,7 +10,7 @@ Kirigami.FormLayout {
     QQC2.SpinBox {
         id: columnsSpinBox
 
-        Kirigami.FormData.label: i18n("Antal kolumner:")
+        Kirigami.FormData.label: i18n("Columns:")
 
         from: 1
         to: 5
@@ -19,7 +19,7 @@ Kirigami.FormLayout {
     QQC2.SpinBox {
         id: cardHeightSpinBox
 
-        Kirigami.FormData.label: i18n("Korthöjd:")
+        Kirigami.FormData.label: i18n("Card height:")
 
         from: 80
         to: 300
@@ -37,12 +37,12 @@ Kirigami.FormLayout {
     QQC2.ComboBox {
         id: sortCombo
 
-        Kirigami.FormData.label: i18n("Visning:")
+        Kirigami.FormData.label: i18n("View:")
 
         model: [
-            i18n("Alfabetiskt (A–Ö)"),
-            i18n("Favoriter först"),
-            i18n("Endast favoriter")
+            i18n("Alphabetical (A–Z)"),
+            i18n("Favorites first"),
+            i18n("Favorites only")
         ]
     }
 }

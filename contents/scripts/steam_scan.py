@@ -5,7 +5,13 @@ import subprocess
 import sys
 import urllib.parse
 import urllib.request
+from io import BytesIO
 from pathlib import Path
+
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -23,6 +29,7 @@ API_BASE = "https://www.steamgriddb.com/api/v2"
 def load_api_key():
     try:
         return KEY_FILE.read_text().strip()
+
     except Exception as e:
         print(
             f"SteamGridDB API key could not be read: {e}",
@@ -60,7 +67,9 @@ def api_request(url, api_key):
     )
 
     with urllib.request.urlopen(request, timeout=15) as response:
-        return json.loads(response.read().decode("utf-8"))
+        return json.loads(
+            response.read().decode("utf-8")
+        )
 
 
 def get_sgdb_game_id(appid, api_key):
@@ -134,24 +143,7 @@ def get_hero_url(sgdb_id, api_key):
     return None
 
 
-def download_image(url, appid, target_dir):
-    if not url:
-        return None
-
-    target_dir.mkdir(parents=True, exist_ok=True)
-
-    suffix = Path(
-        urllib.parse.urlparse(url).path
-    ).suffix.lower()
-
-    if suffix not in [".jpg", ".jpeg", ".png", ".webp"]:
-        suffix = ".jpg"
-
-    output = target_dir / f"{appid}{suffix}"
-
-    if output.exists() and output.stat().st_size > 0:
-        return str(output)
-
+def download_bytes(url):
     request = urllib.request.Request(
         url,
         headers={
@@ -159,9 +151,153 @@ def download_image(url, appid, target_dir):
         }
     )
 
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return response.read()
+
+
+def normalize_logo(image_data, output):
+    if Image is None:
+        return False
+
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            image_data = response.read()
+        image = Image.open(BytesIO(image_data)).convert("RGBA")
+
+        # Trim almost-transparent outer pixels.
+        alpha = image.getchannel("A")
+
+        alpha_mask = alpha.point(
+            lambda value: 255 if value > 8 else 0
+        )
+
+        bbox = alpha_mask.getbbox()
+
+        if bbox:
+            image = image.crop(bbox)
+
+        if image.width <= 0 or image.height <= 0:
+            return False
+
+        # Add proportional transparent padding instead of forcing
+        # every logo onto the same fixed-size canvas.
+        padding_x = max(8, round(image.width * 0.05))
+        padding_y = max(8, round(image.height * 0.05))
+
+        canvas_width = image.width + (padding_x * 2)
+        canvas_height = image.height + (padding_y * 2)
+
+        canvas = Image.new(
+            "RGBA",
+            (canvas_width, canvas_height),
+            (0, 0, 0, 0)
+        )
+
+        canvas.alpha_composite(
+            image,
+            (padding_x, padding_y)
+        )
+
+        canvas.save(
+            output,
+            format="PNG",
+            optimize=True
+        )
+
+        return True
+
+    except Exception as e:
+        print(
+            f"Logo normalization failed: {e}",
+            file=sys.stderr
+        )
+
+        return False
+
+
+def download_logo(url, appid):
+    if not url:
+        return None
+
+    LOGO_DIR.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    # Normalized logos are always PNG.
+    output = LOGO_DIR / f"{appid}.png"
+
+    if output.exists() and output.stat().st_size > 0:
+        return str(output)
+
+    try:
+        image_data = download_bytes(url)
+
+        if normalize_logo(image_data, output):
+            return str(output)
+
+        # Pillow missing or normalization failed.
+        # Fall back to the original SteamGridDB image.
+        suffix = Path(
+            urllib.parse.urlparse(url).path
+        ).suffix.lower()
+
+        if suffix not in [
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".webp"
+        ]:
+            suffix = ".png"
+
+        fallback = LOGO_DIR / f"{appid}{suffix}"
+
+        fallback.write_bytes(image_data)
+
+        if Image is None:
+            print(
+                "Pillow is not installed; "
+                "logo normalization was skipped.",
+                file=sys.stderr
+            )
+
+        return str(fallback)
+
+    except Exception as e:
+        print(
+            f"Logo download failed for {appid}: {e}",
+            file=sys.stderr
+        )
+
+        return None
+
+
+def download_image(url, appid, target_dir):
+    if not url:
+        return None
+
+    target_dir.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    suffix = Path(
+        urllib.parse.urlparse(url).path
+    ).suffix.lower()
+
+    if suffix not in [
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp"
+    ]:
+        suffix = ".jpg"
+
+    output = target_dir / f"{appid}{suffix}"
+
+    if output.exists() and output.stat().st_size > 0:
+        return str(output)
+
+    try:
+        image_data = download_bytes(url)
 
         output.write_bytes(image_data)
 
@@ -187,7 +323,8 @@ def main():
 
     if not api_key:
         print(
-            "SteamGridDB API key missing. Returning games without images.",
+            "SteamGridDB API key missing. "
+            "Returning games without images.",
             file=sys.stderr
         )
 
@@ -200,37 +337,52 @@ def main():
 
         return
 
-    for index, game in enumerate(games, start=1):
+    for index, game in enumerate(
+        games,
+        start=1
+    ):
         appid = game.get("appid")
-        name = game.get("name", "Unknown")
+        name = game.get(
+            "name",
+            "Unknown"
+        )
 
         print(
-            f"SteamGridDB: {index}/{len(games)} - {name}",
+            f"SteamGridDB: "
+            f"{index}/{len(games)} - {name}",
             file=sys.stderr
         )
 
         if not appid:
             continue
 
-        sgdb_id = get_sgdb_game_id(appid, api_key)
+        sgdb_id = get_sgdb_game_id(
+            appid,
+            api_key
+        )
 
         if not sgdb_id:
             continue
 
-        logo_url = get_logo_url(sgdb_id, api_key)
+        logo_url = get_logo_url(
+            sgdb_id,
+            api_key
+        )
 
         if logo_url:
-            logo_path = download_image(
+            logo_path = download_logo(
                 logo_url,
-                appid,
-                LOGO_DIR
+                appid
             )
 
             if logo_path:
                 game["logo"] = logo_path
                 game["logoUrl"] = logo_url
 
-        hero_url = get_hero_url(sgdb_id, api_key)
+        hero_url = get_hero_url(
+            sgdb_id,
+            api_key
+        )
 
         if hero_url:
             hero_path = download_image(

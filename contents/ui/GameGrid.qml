@@ -130,7 +130,7 @@ GridView {
         width: grid.cellWidth - 10
         height: grid.cardHeight
 
-        scale: mouseArea.pressed ? 0.97 : 1.0
+        scale: mouseArea.pressed ? 0.975 : 1.0
 
         Behavior on scale {
             NumberAnimation {
@@ -139,25 +139,53 @@ GridView {
             }
         }
 
+        // Subtle outer glow on hover
+        Rectangle {
+            anchors.fill: card
+            anchors.margins: -2
+
+            radius: card.radius + 2
+            color: "transparent"
+
+            border.width: 1
+            border.color: "#28a9e8"
+
+            opacity: mouseArea.containsMouse ? 0.55 : 0.0
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: 140
+                }
+            }
+        }
+
         Rectangle {
             id: card
 
             anchors.fill: parent
 
-            radius: 8
-            color: "#151515"
+            radius: 9
+            color: "#0c151d"
+
             border.color: grid.isFavorite(modelData.appid)
-                ? "#d6a400"
-                : (mouseArea.containsMouse ? "#777777" : "#444444")
+                ? "#d5a72b"
+                : (mouseArea.containsMouse
+                    ? "#45b9ee"
+                    : "#304859")
 
             border.width: grid.isFavorite(modelData.appid) ? 2 : 1
+
             clip: true
 
             Behavior on border.color {
                 ColorAnimation {
-                    duration: 120
+                    duration: 140
                 }
             }
+
+            // ----------------------------------------------------
+            // HERO BACKGROUND
+            // ----------------------------------------------------
 
             Image {
                 id: heroImage
@@ -173,29 +201,65 @@ GridView {
                     : ""
 
                 fillMode: Image.PreserveAspectCrop
+
                 asynchronous: true
                 cache: true
+                smooth: true
             }
 
+            // Dark cinematic overlay
             Rectangle {
                 anchors.fill: parent
 
-                color: mouseArea.containsMouse
-                    ? "#52000000"
-                    : "#70000000"
+                gradient: Gradient {
+                    GradientStop {
+                        position: 0.0
+                        color: mouseArea.containsMouse
+                            ? "#28040a10"
+                            : "#3a040a10"
+                    }
 
-                Behavior on color {
-                    ColorAnimation {
-                        duration: 120
+                    GradientStop {
+                        position: 0.55
+                        color: mouseArea.containsMouse
+                            ? "#38050b11"
+                            : "#50050b11"
+                    }
+
+                    GradientStop {
+                        position: 1.0
+                        color: mouseArea.containsMouse
+                            ? "#6202070b"
+                            : "#7802070b"
                     }
                 }
             }
 
+            // Slight blue tint
+            Rectangle {
+                anchors.fill: parent
+
+                color: "#08192a"
+                opacity: mouseArea.containsMouse ? 0.08 : 0.14
+
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: 140
+                    }
+                }
+            }
+
+            // ----------------------------------------------------
+            // GAME LOGO
+            // ----------------------------------------------------
+
             Image {
                 id: gameLogo
 
-                anchors.fill: parent
-                anchors.margins: 14
+                anchors.centerIn: parent
+
+                width: parent.width * 0.72
+                height: parent.height * 0.62
 
                 visible: modelData.logo !== undefined
                          && modelData.logo !== null
@@ -206,46 +270,94 @@ GridView {
                     : ""
 
                 fillMode: Image.PreserveAspectFit
+
                 asynchronous: true
                 cache: true
+                smooth: true
+
+                opacity: mouseArea.containsMouse ? 1.0 : 0.94
+
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: 140
+                    }
+                }
             }
 
+            // Fallback when SteamGridDB has no logo
             Text {
                 anchors.centerIn: parent
-                width: parent.width - 24
+
+                width: parent.width - 32
 
                 visible: !gameLogo.visible
 
-                color: "white"
+                color: "#f2f6f9"
                 text: modelData.name
 
                 font.pixelSize: 18
                 font.bold: true
+                font.letterSpacing: 0.5
 
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
                 wrapMode: Text.Wrap
             }
 
+            // ----------------------------------------------------
+            // FAVORITE STAR
+            // ----------------------------------------------------
+
             Text {
                 anchors.top: parent.top
                 anchors.right: parent.right
-                anchors.margins: 8
+
+                anchors.topMargin: 7
+                anchors.rightMargin: 9
 
                 visible: grid.isFavorite(modelData.appid)
 
                 text: "★"
-                color: "#ffd54a"
+                color: "#ffd34e"
+
                 font.pixelSize: 18
+
+                style: Text.Outline
+                styleColor: "#66000000"
             }
+
+            // Subtle bottom highlight
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+
+                height: 1
+
+                color: mouseArea.containsMouse
+                    ? "#4fc7ff"
+                    : "#20435a"
+
+                opacity: mouseArea.containsMouse ? 0.9 : 0.55
+
+                Behavior on color {
+                    ColorAnimation {
+                        duration: 140
+                    }
+                }
+            }
+
+            // ----------------------------------------------------
+            // CONTEXT MENU
+            // ----------------------------------------------------
 
             QQC2.Menu {
                 id: contextMenu
 
                 QQC2.MenuItem {
                     text: grid.isFavorite(modelData.appid)
-                        ? i18n("Ta bort från favoriter")
-                        : i18n("Markera som favorit")
+                        ? i18n("Remove from favorites")
+                        : i18n("Add to favorites")
 
                     onTriggered: {
                         grid.toggleFavorite(modelData.appid)
@@ -253,10 +365,15 @@ GridView {
                 }
             }
 
+            // ----------------------------------------------------
+            // INTERACTION
+            // ----------------------------------------------------
+
             MouseArea {
                 id: mouseArea
 
                 anchors.fill: parent
+
                 hoverEnabled: true
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 cursorShape: Qt.PointingHandCursor
@@ -279,6 +396,7 @@ GridView {
             QQC2.ToolTip {
                 visible: mouseArea.containsMouse
                 delay: 600
+
                 text: modelData.name
             }
         }

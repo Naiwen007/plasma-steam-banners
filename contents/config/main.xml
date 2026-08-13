@@ -5,26 +5,26 @@
                           https://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
     <group name="General">
         <entry name="columns" type="Int">
-            <label>Antal kolumner</label>
+            <label>Columns</label>
             <default>2</default>
             <min>1</min>
             <max>5</max>
         </entry>
 
         <entry name="cardHeight" type="Int">
-            <label>Korthöjd</label>
+            <label>Card height</label>
             <default>120</default>
             <min>80</min>
             <max>300</max>
         </entry>
 
         <entry name="favorites" type="String">
-            <label>Favoriter</label>
+            <label>Favorites</label>
             <default></default>
         </entry>
 
         <entry name="sortMode" type="Int">
-            <label>Sortering</label>
+            <label>View</label>
             <default>0</default>
             <min>0</min>
             <max>2</max>
