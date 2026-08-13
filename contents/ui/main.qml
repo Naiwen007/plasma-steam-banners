@@ -1,12 +1,29 @@
 import QtQuick
 import QtQuick.Controls as QQC2
 import org.kde.plasma.plasmoid
+import SteamBanners.Process
 
 PlasmoidItem {
     id: root
 
     implicitWidth: 600
     implicitHeight: 500
+
+    property bool apiKeyAvailable: true
+    property int apiNoticeHeight: apiKeyAvailable ? 0 : 64
+
+    Process {
+        id: apiKeyChecker
+
+        onOutputReady: function(output) {
+            root.apiKeyAvailable = output.trim() === "1"
+        }
+
+        onErrorOccurred: function(error) {
+            console.log("### API KEY CHECK ERROR:", error)
+            root.apiKeyAvailable = false
+        }
+    }
 
     SteamScanner {
         id: scanner
@@ -28,7 +45,6 @@ PlasmoidItem {
 
     // ============================================================
     // HEADER
-    // Fixed height: 200 px
     // ============================================================
 
     Item {
@@ -46,20 +62,12 @@ PlasmoidItem {
             anchors.fill: parent
 
             source: "../images/header.png"
-
-            // Fill the 200 px header without stretching the image.
-            // Excess image area is cropped instead.
             fillMode: Image.Stretch
 
             asynchronous: true
             cache: true
             smooth: true
         }
-
-        // ========================================================
-        // REFRESH
-        // Invisible click area over the refresh button in header.png
-        // ========================================================
 
         MouseArea {
             id: refreshArea
@@ -71,6 +79,7 @@ PlasmoidItem {
             height: headerArea.height * 0.64
 
             hoverEnabled: true
+
             cursorShape: scanner.scanning
             ? Qt.ArrowCursor
             : Qt.PointingHandCursor
@@ -87,11 +96,6 @@ PlasmoidItem {
             ? i18n("Refreshing...")
             : i18n("Refresh games")
         }
-
-        // ========================================================
-        // SETTINGS
-        // Invisible click area over the settings button in header.png
-        // ========================================================
 
         MouseArea {
             id: settingsArea
@@ -115,13 +119,74 @@ PlasmoidItem {
     }
 
     // ============================================================
+    // API KEY NOTICE
+    // ============================================================
+
+    Rectangle {
+        id: apiNotice
+
+        anchors.top: headerArea.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+
+        anchors.topMargin: root.apiKeyAvailable ? 0 : 8
+        anchors.leftMargin: 10
+        anchors.rightMargin: 10
+
+        height: root.apiNoticeHeight
+
+        visible: !root.apiKeyAvailable
+
+        radius: 8
+
+        color: "#132330"
+        border.color: "#2f789e"
+        border.width: 1
+
+        Row {
+            anchors.fill: parent
+            anchors.leftMargin: 14
+            anchors.rightMargin: 10
+
+            spacing: 12
+
+            QQC2.Label {
+                anchors.verticalCenter: parent.verticalCenter
+
+                width: parent.width - settingsNoticeButton.width - 30
+
+                text: i18n(
+                    "SteamGridDB API key not found. Add one in Settings to download game artwork."
+                )
+
+                wrapMode: Text.WordWrap
+            }
+
+            QQC2.Button {
+                id: settingsNoticeButton
+
+                anchors.verticalCenter: parent.verticalCenter
+
+                text: i18n("Open Settings")
+
+                onClicked: {
+                    plasmoid.internalAction("configure").trigger()
+                }
+            }
+        }
+    }
+
+    // ============================================================
     // GAME GRID
     // ============================================================
 
     GameGrid {
         id: gameGrid
 
-        anchors.top: headerArea.bottom
+        anchors.top: root.apiKeyAvailable
+        ? headerArea.bottom
+        : apiNotice.bottom
+
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
@@ -165,6 +230,17 @@ PlasmoidItem {
 
     Component.onCompleted: {
         console.log("### MAIN QML LOADED ###")
+
+        apiKeyChecker.start(
+            "python3",
+            [
+                "-c",
+                "import pathlib; " +
+                "p=pathlib.Path.home()/'.config'/'steambanners'/'steamgriddb.key'; " +
+                "print('1' if p.exists() and p.read_text(encoding='utf-8').strip() else '0')"
+            ]
+        )
+
         scanner.scan()
     }
 }
