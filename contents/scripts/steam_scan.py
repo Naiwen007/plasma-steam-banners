@@ -225,7 +225,6 @@ def find_local_steam_hero(appid):
                 if path.suffix.lower() not in valid_suffixes:
                     continue
 
-                # Do not use blurred variants.
                 if "blur" in path.name.lower():
                     continue
 
@@ -233,7 +232,7 @@ def find_local_steam_hero(appid):
 
         except Exception as e:
             print(
-                f"Could not inspect Steam cache "
+                f"Could not inspect Steam Hero cache "
                 f"for {appid}: {e}",
                 file=sys.stderr
             )
@@ -242,7 +241,70 @@ def find_local_steam_hero(appid):
         if not candidates:
             continue
 
-        # Prefer the normal top-level file if one exists.
+        candidates.sort(
+            key=lambda path: (
+                len(path.relative_to(app_dir).parts),
+                str(path)
+            )
+        )
+
+        return candidates[0]
+
+    return None
+
+
+def find_local_steam_logo(appid):
+    """
+    Find Steam's locally cached game logo.
+
+    Steam may store it directly under:
+
+        librarycache/<appid>/logo.png
+
+    or inside a hash directory:
+
+        librarycache/<appid>/<hash>/logo.png
+    """
+
+    if not appid:
+        return None
+
+    valid_suffixes = {
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp"
+    }
+
+    for cache_root in steam_library_cache_roots():
+        app_dir = cache_root / str(appid)
+
+        if not app_dir.exists():
+            continue
+
+        candidates = []
+
+        try:
+            for path in app_dir.rglob("logo.*"):
+                if not path.is_file():
+                    continue
+
+                if path.suffix.lower() not in valid_suffixes:
+                    continue
+
+                candidates.append(path)
+
+        except Exception as e:
+            print(
+                f"Could not inspect Steam Logo cache "
+                f"for {appid}: {e}",
+                file=sys.stderr
+            )
+            continue
+
+        if not candidates:
+            continue
+
         candidates.sort(
             key=lambda path: (
                 len(path.relative_to(app_dir).parts),
@@ -279,6 +341,7 @@ def normalize_logo(image_data, output):
             BytesIO(image_data)
         ).convert("RGBA")
 
+        # Trim almost-transparent outer pixels.
         alpha = image.getchannel("A")
 
         alpha_mask = alpha.point(
@@ -293,6 +356,7 @@ def normalize_logo(image_data, output):
         if image.width <= 0 or image.height <= 0:
             return False
 
+        # Add proportional transparent padding.
         padding_x = max(
             8,
             round(image.width * 0.05)
@@ -346,6 +410,10 @@ def normalize_logo(image_data, output):
 
 
 def download_logo(url, appid):
+    """
+    Download and normalize a SteamGridDB logo.
+    """
+
     if not url:
         return None
 
@@ -371,6 +439,7 @@ def download_logo(url, appid):
         ):
             return str(output)
 
+        # Pillow missing or normalization failed.
         suffix = Path(
             urllib.parse.urlparse(
                 url
@@ -405,6 +474,78 @@ def download_logo(url, appid):
     except Exception as e:
         print(
             f"Logo download failed "
+            f"for {appid}: {e}",
+            file=sys.stderr
+        )
+
+        return None
+
+
+def copy_local_steam_logo(appid):
+    """
+    Copy and normalize Steam's locally cached logo.
+
+    Steam logos use a separate filename so they do not
+    interfere with a future SteamGridDB logo for the same game.
+    """
+
+    source = find_local_steam_logo(appid)
+
+    if not source:
+        return None
+
+    LOGO_DIR.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    output = (
+        LOGO_DIR
+        / f"{appid}_steam.png"
+    )
+
+    if (
+        output.exists()
+        and output.stat().st_size > 0
+    ):
+        return str(output)
+
+    try:
+        image_data = source.read_bytes()
+
+        if normalize_logo(
+            image_data,
+            output
+        ):
+            return str(output)
+
+        # If Pillow is unavailable or normalization fails,
+        # preserve the original Steam logo as a fallback.
+        suffix = source.suffix.lower()
+
+        if suffix not in [
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".webp"
+        ]:
+            suffix = ".png"
+
+        fallback = (
+            LOGO_DIR
+            / f"{appid}_steam{suffix}"
+        )
+
+        shutil.copy2(
+            source,
+            fallback
+        )
+
+        return str(fallback)
+
+    except Exception as e:
+        print(
+            f"Could not process local Steam Logo "
             f"for {appid}: {e}",
             file=sys.stderr
         )
@@ -527,7 +668,7 @@ def copy_local_steam_hero(appid):
 
 def download_steam_hero(appid):
     """
-    Final fallback: try Steam's public CDN.
+    Final Hero fallback: try Steam's public CDN.
     """
 
     if not appid:
@@ -645,10 +786,21 @@ def main():
                 api_key
             )
 
-        # ----------------------------------------------------
+        # ====================================================
         # LOGO
         #
-        # SteamGridDB only for now.
+        # Priority:
+        #
+        # 1. SteamGridDB Logo
+        # 2. Local Steam librarycache logo
+        # 3. Text fallback handled by QML
+        # ====================================================
+
+        logo_path = None
+        logo_url = None
+
+        # ----------------------------------------------------
+        # 1. SteamGridDB Logo
         # ----------------------------------------------------
 
         if sgdb_id:
@@ -657,26 +809,56 @@ def main():
                 api_key
             )
 
-            if logo_url:
-                logo_path = download_logo(
-                    logo_url,
-                    appid
+        if logo_url:
+            logo_path = download_logo(
+                logo_url,
+                appid
+            )
+
+            if logo_path:
+                game["logo"] = (
+                    logo_path
                 )
 
-                if logo_path:
-                    game["logo"] = (
-                        logo_path
-                    )
+                game["logoUrl"] = (
+                    logo_url
+                )
 
-                    game["logoUrl"] = (
-                        logo_url
-                    )
-
-                    game["logoSource"] = (
-                        "steamgriddb"
-                    )
+                game["logoSource"] = (
+                    "steamgriddb"
+                )
 
         # ----------------------------------------------------
+        # 2. Local Steam Logo
+        # ----------------------------------------------------
+
+        if not logo_path:
+            local_steam_logo = (
+                copy_local_steam_logo(
+                    appid
+                )
+            )
+
+            if local_steam_logo:
+                logo_path = (
+                    local_steam_logo
+                )
+
+                game["logo"] = (
+                    local_steam_logo
+                )
+
+                game["logoSource"] = (
+                    "steam-local"
+                )
+
+                print(
+                    f"Local Steam Logo fallback: "
+                    f"{name}",
+                    file=sys.stderr
+                )
+
+        # ====================================================
         # HERO
         #
         # Priority:
@@ -684,7 +866,7 @@ def main():
         # 1. SteamGridDB Hero
         # 2. Local Steam librarycache
         # 3. Steam CDN
-        # ----------------------------------------------------
+        # ====================================================
 
         hero_path = None
         hero_url = None
