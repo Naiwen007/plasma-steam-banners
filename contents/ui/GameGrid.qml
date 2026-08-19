@@ -13,10 +13,12 @@ GridView {
     property int artworkRevision: 0
     property int sortMode: 0
     property string searchText: ""
+    property string genreFilter: ""
 
     property var games: []
     property string favoritesString: ""
     property var sortedGames: []
+    property var availableGenres: []
 
     cellWidth: width / columns
     cellHeight: cardHeight + 10
@@ -71,6 +73,46 @@ GridView {
         return 0
     }
 
+    function rebuildGenres() {
+        var result = []
+        var seen = {}
+
+        if (!games) {
+            availableGenres = result
+            return
+        }
+
+        for (var i = 0; i < games.length; ++i) {
+            var genres = games[i].genres || []
+
+            for (var j = 0; j < genres.length; ++j) {
+                var genre = genres[j]
+
+                if (
+                    genre
+                    && genre !== ""
+                    && !seen[genre]
+                ) {
+                    seen[genre] = true
+                    result.push(genre)
+                }
+            }
+        }
+
+        result.sort(function(a, b) {
+            return a.localeCompare(b)
+        })
+
+        availableGenres = result
+
+        if (
+            genreFilter !== ""
+            && result.indexOf(genreFilter) === -1
+        ) {
+            genreFilter = ""
+        }
+    }
+
     function rebuildModel() {
         var result = []
 
@@ -84,6 +126,14 @@ GridView {
 
             if (sortMode === 2 && !isFavorite(game.appid)) {
                 continue
+            }
+
+            if (genreFilter !== "") {
+                var genres = game.genres || []
+
+                if (genres.indexOf(genreFilter) === -1) {
+                    continue
+                }
             }
 
             var query = searchText.trim().toLowerCase()
@@ -118,12 +168,20 @@ GridView {
         sortedGames = result
     }
 
-    onGamesChanged: rebuildModel()
+    onGamesChanged: {
+        rebuildGenres()
+        rebuildModel()
+    }
+
     onSortModeChanged: rebuildModel()
     onFavoritesStringChanged: rebuildModel()
     onSearchTextChanged: rebuildModel()
+    onGenreFilterChanged: rebuildModel()
 
-    Component.onCompleted: rebuildModel()
+    Component.onCompleted: {
+        rebuildGenres()
+        rebuildModel()
+    }
 
     Process {
         id: launcher

@@ -22,6 +22,7 @@ ORIGINAL_SCANNER = SCRIPT_DIR / "steam_library_scan.py"
 CACHE_DIR = Path.home() / ".cache" / "steambanners"
 LOGO_DIR = CACHE_DIR / "logos"
 HERO_DIR = CACHE_DIR / "heroes"
+METADATA_FILE = CACHE_DIR / "game_metadata.json"
 
 KEY_FILE = Path.home() / ".config" / "steambanners" / "steamgriddb.key"
 
@@ -985,6 +986,191 @@ def download_steam_hero(appid):
 
 
 # ============================================================
+# GAME METADATA CACHE
+# ============================================================
+
+def load_metadata_cache():
+    if not METADATA_FILE.exists():
+        return {}
+
+    try:
+        data = json.loads(
+            METADATA_FILE.read_text(
+                encoding="utf-8"
+            )
+        )
+
+        if isinstance(data, dict):
+            return data
+
+    except Exception as e:
+        print(
+            f"Could not read metadata cache: {e}",
+            file=sys.stderr
+        )
+
+    return {}
+
+
+def save_metadata_cache(metadata):
+    try:
+        CACHE_DIR.mkdir(
+            parents=True,
+            exist_ok=True
+        )
+
+        METADATA_FILE.write_text(
+            json.dumps(
+                metadata,
+                ensure_ascii=False,
+                indent=2
+            ),
+            encoding="utf-8"
+        )
+
+        return True
+
+    except Exception as e:
+        print(
+            f"Could not save metadata cache: {e}",
+            file=sys.stderr
+        )
+
+        return False
+
+
+def apply_cached_metadata(
+    game,
+    metadata_cache
+):
+    appid = game.get("appid")
+
+    if not appid:
+        return
+
+    metadata = metadata_cache.get(
+        str(appid),
+        {}
+    )
+
+    genres = metadata.get(
+        "genres",
+        []
+    )
+
+    if isinstance(genres, list):
+        game["genres"] = genres
+    else:
+        game["genres"] = []
+
+
+def get_steam_genres(appid):
+    if not appid:
+        return None
+
+    params = urllib.parse.urlencode({
+        "appids": str(appid),
+        "filters": "genres",
+        "l": "english"
+    })
+
+    url = (
+        "https://store.steampowered.com/"
+        f"api/appdetails?{params}"
+    )
+
+    try:
+        request = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "Steam-Banners/0.2"
+            }
+        )
+
+        with urllib.request.urlopen(
+            request,
+            timeout=15
+        ) as response:
+            data = json.loads(
+                response.read().decode("utf-8")
+            )
+
+        app_data = data.get(
+            str(appid),
+            {}
+        )
+
+        if not app_data.get("success"):
+            return None
+
+        details = app_data.get(
+            "data",
+            {}
+        )
+
+        genres = details.get(
+            "genres",
+            []
+        )
+
+        result = []
+
+        for genre in genres:
+            name = genre.get(
+                "description",
+                ""
+            ).strip()
+
+            if name and name not in result:
+                result.append(name)
+
+        return result
+
+    except Exception as e:
+        print(
+            f"Steam genre lookup failed "
+            f"for {appid}: {e}",
+            file=sys.stderr
+        )
+
+        return None
+
+
+def refresh_metadata(
+    game,
+    metadata_cache
+):
+    appid = game.get("appid")
+
+    if not appid:
+        return
+
+    key = str(appid)
+
+    genres = get_steam_genres(
+        appid
+    )
+
+    # Keep old cached metadata if Steam
+    # temporarily fails.
+    if genres is None:
+        apply_cached_metadata(
+            game,
+            metadata_cache
+        )
+        return
+
+    metadata = metadata_cache.get(
+        key,
+        {}
+    )
+
+    metadata["genres"] = genres
+    metadata_cache[key] = metadata
+
+    game["genres"] = genres
+
+# ============================================================
 # FAST LOCAL ARTWORK
 # ============================================================
 
@@ -1187,6 +1373,7 @@ def main():
         return
 
     api_key = load_api_key()
+    metadata_cache = load_metadata_cache()
 
     if args.refresh_artwork:
         print(
@@ -1215,15 +1402,30 @@ def main():
         )
 
         if args.refresh_artwork:
+            refresh_metadata(
+                game,
+                metadata_cache
+            )
+
             refresh_artwork(
                 game,
                 api_key
             )
 
         else:
+            apply_cached_metadata(
+                game,
+                metadata_cache
+            )
+
             apply_local_artwork(
                 game
             )
+
+    if args.refresh_artwork:
+        save_metadata_cache(
+            metadata_cache
+        )
 
     print(
         json.dumps(
@@ -1231,7 +1433,6 @@ def main():
             ensure_ascii=False
         )
     )
-
 
 if __name__ == "__main__":
     main()

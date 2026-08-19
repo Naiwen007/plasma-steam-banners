@@ -435,17 +435,35 @@ PlasmoidItem {
 
                 Kirigami.Icon {
                     anchors.centerIn: parent
+
                     width: 31
                     height: 31
+
                     source: "applications-games-symbolic"
                 }
 
-                opacity: 0.60
+                Rectangle {
+                    anchors.top: parent.top
+                    anchors.right: parent.right
+
+                    anchors.topMargin: 5
+                    anchors.rightMargin: 5
+
+                    width: 8
+                    height: 8
+
+                    radius: width / 2
+
+                    visible: gameGrid.genreFilter !== ""
+
+                    color: "#35d9ff"
+
+                    border.width: 1
+                    border.color: "#081923"
+                }
 
                 onClicked: {
-                    console.log(
-                        "### GENRE FILTER COMING SOON ###"
-                    )
+                    genreMenu.popup()
                 }
 
                 background: Rectangle {
@@ -459,11 +477,16 @@ PlasmoidItem {
 
                     border.width:
                     genreButton.hovered
+                    || genreMenu.opened
+                    || gameGrid.genreFilter !== ""
                     ? 2
                     : 1
 
                     border.color:
-                    genreButton.hovered
+                    genreMenu.opened
+                    || gameGrid.genreFilter !== ""
+                    ? "#35d9ff"
+                    : genreButton.hovered
                     ? "#25d7ff"
                     : "#24536a"
 
@@ -480,9 +503,67 @@ PlasmoidItem {
                     }
                 }
 
-                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.visible:
+                hovered && !genreMenu.opened
+
                 QQC2.ToolTip.text:
-                i18n("Genre filter — coming soon")
+                gameGrid.genreFilter !== ""
+                ? i18n("Genre: %1", gameGrid.genreFilter)
+                : i18n("Filter by genre")
+
+                QQC2.Menu {
+                    id: genreMenu
+
+                    y: genreButton.height + 4
+
+                    QQC2.MenuItem {
+                        text: i18n("All Games")
+
+                        checkable: true
+                        checked: gameGrid.genreFilter === ""
+
+                        onTriggered: {
+                            gameGrid.genreFilter = ""
+                        }
+                    }
+
+                    QQC2.MenuSeparator {}
+
+                    Instantiator {
+                        model: gameGrid.availableGenres
+
+                        delegate: QQC2.MenuItem {
+                            required property string modelData
+
+                            text: modelData
+
+                            checkable: true
+                            checked:
+                            gameGrid.genreFilter === modelData
+
+                            onTriggered: {
+                                if (gameGrid.genreFilter === modelData) {
+                                    gameGrid.genreFilter = ""
+                                } else {
+                                    gameGrid.genreFilter = modelData
+                                }
+                            }
+                        }
+
+                        onObjectAdded: function(index, object) {
+                            genreMenu.insertItem(
+                                index + 2,
+                                object
+                            )
+                        }
+
+                        onObjectRemoved: function(index, object) {
+                            genreMenu.removeItem(
+                                object
+                            )
+                        }
+                    }
+                }
             }
 
             // ====================================================
