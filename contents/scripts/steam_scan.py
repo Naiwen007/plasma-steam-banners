@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import json
+import shutil
 import subprocess
 import sys
 import urllib.parse
@@ -25,16 +26,17 @@ KEY_FILE = Path.home() / ".config" / "steambanners" / "steamgriddb.key"
 
 API_BASE = "https://www.steamgriddb.com/api/v2"
 
+STEAM_ASSET_BASE = (
+    "https://cdn.cloudflare.steamstatic.com/steam/apps"
+)
+
 
 def load_api_key():
     try:
-        return KEY_FILE.read_text().strip()
+        key = KEY_FILE.read_text().strip()
+        return key if key else None
 
-    except Exception as e:
-        print(
-            f"SteamGridDB API key could not be read: {e}",
-            file=sys.stderr
-        )
+    except Exception:
         return None
 
 
@@ -62,17 +64,23 @@ def api_request(url, api_key):
         url,
         headers={
             "Authorization": f"Bearer {api_key}",
-            "User-Agent": "Steam-Banners/0.1"
+            "User-Agent": "Steam-Banners/0.2"
         }
     )
 
-    with urllib.request.urlopen(request, timeout=15) as response:
+    with urllib.request.urlopen(
+        request,
+        timeout=15
+    ) as response:
         return json.loads(
             response.read().decode("utf-8")
         )
 
 
 def get_sgdb_game_id(appid, api_key):
+    if not api_key:
+        return None
+
     try:
         data = api_request(
             f"{API_BASE}/games/steam/{appid}",
@@ -84,7 +92,8 @@ def get_sgdb_game_id(appid, api_key):
 
     except Exception as e:
         print(
-            f"SteamGridDB game lookup failed for {appid}: {e}",
+            f"SteamGridDB game lookup failed "
+            f"for {appid}: {e}",
             file=sys.stderr
         )
 
@@ -92,7 +101,7 @@ def get_sgdb_game_id(appid, api_key):
 
 
 def get_logo_url(sgdb_id, api_key):
-    if not sgdb_id:
+    if not sgdb_id or not api_key:
         return None
 
     try:
@@ -110,7 +119,8 @@ def get_logo_url(sgdb_id, api_key):
 
     except Exception as e:
         print(
-            f"SteamGridDB logo request failed for game {sgdb_id}: {e}",
+            f"SteamGridDB logo request failed "
+            f"for game {sgdb_id}: {e}",
             file=sys.stderr
         )
 
@@ -118,7 +128,7 @@ def get_logo_url(sgdb_id, api_key):
 
 
 def get_hero_url(sgdb_id, api_key):
-    if not sgdb_id:
+    if not sgdb_id or not api_key:
         return None
 
     try:
@@ -136,9 +146,111 @@ def get_hero_url(sgdb_id, api_key):
 
     except Exception as e:
         print(
-            f"SteamGridDB hero request failed for game {sgdb_id}: {e}",
+            f"SteamGridDB hero request failed "
+            f"for game {sgdb_id}: {e}",
             file=sys.stderr
         )
+
+    return None
+
+
+def get_steam_hero_url(appid):
+    if not appid:
+        return None
+
+    return (
+        f"{STEAM_ASSET_BASE}/"
+        f"{appid}/library_hero.jpg"
+    )
+
+
+def steam_library_cache_roots():
+    candidates = [
+        Path.home()
+        / ".local/share/Steam/appcache/librarycache",
+
+        Path.home()
+        / ".steam/steam/appcache/librarycache",
+
+        Path.home()
+        / ".var/app/com.valvesoftware.Steam"
+        / ".local/share/Steam/appcache/librarycache",
+    ]
+
+    result = []
+
+    for path in candidates:
+        if path.exists() and path not in result:
+            result.append(path)
+
+    return result
+
+
+def find_local_steam_hero(appid):
+    """
+    Find Steam's locally cached Library Hero.
+
+    Steam may store it directly under:
+
+        librarycache/<appid>/library_hero.jpg
+
+    or inside a hash directory:
+
+        librarycache/<appid>/<hash>/library_hero.jpg
+    """
+
+    if not appid:
+        return None
+
+    valid_suffixes = {
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp"
+    }
+
+    for cache_root in steam_library_cache_roots():
+        app_dir = cache_root / str(appid)
+
+        if not app_dir.exists():
+            continue
+
+        candidates = []
+
+        try:
+            for path in app_dir.rglob("library_hero.*"):
+                if not path.is_file():
+                    continue
+
+                if path.suffix.lower() not in valid_suffixes:
+                    continue
+
+                # Do not use blurred variants.
+                if "blur" in path.name.lower():
+                    continue
+
+                candidates.append(path)
+
+        except Exception as e:
+            print(
+                f"Could not inspect Steam cache "
+                f"for {appid}: {e}",
+                file=sys.stderr
+            )
+            continue
+
+        if not candidates:
+            continue
+
+        # Prefer the normal top-level file if one exists.
+        candidates.sort(
+            key=lambda path: (
+                len(path.relative_to(app_dir).parts),
+                str(path)
+            )
+        )
+
+        return candidates[0]
 
     return None
 
@@ -147,11 +259,14 @@ def download_bytes(url):
     request = urllib.request.Request(
         url,
         headers={
-            "User-Agent": "Steam-Banners/0.1"
+            "User-Agent": "Steam-Banners/0.2"
         }
     )
 
-    with urllib.request.urlopen(request, timeout=30) as response:
+    with urllib.request.urlopen(
+        request,
+        timeout=30
+    ) as response:
         return response.read()
 
 
@@ -160,9 +275,10 @@ def normalize_logo(image_data, output):
         return False
 
     try:
-        image = Image.open(BytesIO(image_data)).convert("RGBA")
+        image = Image.open(
+            BytesIO(image_data)
+        ).convert("RGBA")
 
-        # Trim almost-transparent outer pixels.
         alpha = image.getchannel("A")
 
         alpha_mask = alpha.point(
@@ -177,23 +293,39 @@ def normalize_logo(image_data, output):
         if image.width <= 0 or image.height <= 0:
             return False
 
-        # Add proportional transparent padding instead of forcing
-        # every logo onto the same fixed-size canvas.
-        padding_x = max(8, round(image.width * 0.05))
-        padding_y = max(8, round(image.height * 0.05))
+        padding_x = max(
+            8,
+            round(image.width * 0.05)
+        )
 
-        canvas_width = image.width + (padding_x * 2)
-        canvas_height = image.height + (padding_y * 2)
+        padding_y = max(
+            8,
+            round(image.height * 0.05)
+        )
+
+        canvas_width = (
+            image.width + (padding_x * 2)
+        )
+
+        canvas_height = (
+            image.height + (padding_y * 2)
+        )
 
         canvas = Image.new(
             "RGBA",
-            (canvas_width, canvas_height),
+            (
+                canvas_width,
+                canvas_height
+            ),
             (0, 0, 0, 0)
         )
 
         canvas.alpha_composite(
             image,
-            (padding_x, padding_y)
+            (
+                padding_x,
+                padding_y
+            )
         )
 
         canvas.save(
@@ -222,22 +354,27 @@ def download_logo(url, appid):
         exist_ok=True
     )
 
-    # Normalized logos are always PNG.
     output = LOGO_DIR / f"{appid}.png"
 
-    if output.exists() and output.stat().st_size > 0:
+    if (
+        output.exists()
+        and output.stat().st_size > 0
+    ):
         return str(output)
 
     try:
         image_data = download_bytes(url)
 
-        if normalize_logo(image_data, output):
+        if normalize_logo(
+            image_data,
+            output
+        ):
             return str(output)
 
-        # Pillow missing or normalization failed.
-        # Fall back to the original SteamGridDB image.
         suffix = Path(
-            urllib.parse.urlparse(url).path
+            urllib.parse.urlparse(
+                url
+            ).path
         ).suffix.lower()
 
         if suffix not in [
@@ -248,9 +385,13 @@ def download_logo(url, appid):
         ]:
             suffix = ".png"
 
-        fallback = LOGO_DIR / f"{appid}{suffix}"
+        fallback = (
+            LOGO_DIR / f"{appid}{suffix}"
+        )
 
-        fallback.write_bytes(image_data)
+        fallback.write_bytes(
+            image_data
+        )
 
         if Image is None:
             print(
@@ -263,14 +404,19 @@ def download_logo(url, appid):
 
     except Exception as e:
         print(
-            f"Logo download failed for {appid}: {e}",
+            f"Logo download failed "
+            f"for {appid}: {e}",
             file=sys.stderr
         )
 
         return None
 
 
-def download_image(url, appid, target_dir):
+def download_image(
+    url,
+    appid,
+    target_dir
+):
     if not url:
         return None
 
@@ -280,7 +426,9 @@ def download_image(url, appid, target_dir):
     )
 
     suffix = Path(
-        urllib.parse.urlparse(url).path
+        urllib.parse.urlparse(
+            url
+        ).path
     ).suffix.lower()
 
     if suffix not in [
@@ -291,24 +439,159 @@ def download_image(url, appid, target_dir):
     ]:
         suffix = ".jpg"
 
-    output = target_dir / f"{appid}{suffix}"
+    output = (
+        target_dir / f"{appid}{suffix}"
+    )
 
-    if output.exists() and output.stat().st_size > 0:
+    if (
+        output.exists()
+        and output.stat().st_size > 0
+    ):
         return str(output)
 
     try:
-        image_data = download_bytes(url)
+        image_data = download_bytes(
+            url
+        )
 
-        output.write_bytes(image_data)
+        output.write_bytes(
+            image_data
+        )
 
         return str(output)
 
     except Exception as e:
         print(
-            f"Image download failed for {appid}: {e}",
+            f"Image download failed "
+            f"for {appid}: {e}",
             file=sys.stderr
         )
 
+        return None
+
+
+def copy_local_steam_hero(appid):
+    """
+    Copy Steam's already cached Library Hero into the
+    Steam Banners runtime artwork directory.
+    """
+
+    source = find_local_steam_hero(appid)
+
+    if not source:
+        return None
+
+    HERO_DIR.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    suffix = source.suffix.lower()
+
+    if suffix not in [
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp"
+    ]:
+        suffix = ".jpg"
+
+    output = (
+        HERO_DIR
+        / f"{appid}_steam{suffix}"
+    )
+
+    if (
+        output.exists()
+        and output.stat().st_size > 0
+    ):
+        return str(output)
+
+    try:
+        shutil.copy2(
+            source,
+            output
+        )
+
+        return str(output)
+
+    except Exception as e:
+        print(
+            f"Could not copy local Steam Hero "
+            f"for {appid}: {e}",
+            file=sys.stderr
+        )
+
+        return None
+
+
+def download_steam_hero(appid):
+    """
+    Final fallback: try Steam's public CDN.
+    """
+
+    if not appid:
+        return None
+
+    HERO_DIR.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    output = (
+        HERO_DIR / f"{appid}_steam.jpg"
+    )
+
+    if (
+        output.exists()
+        and output.stat().st_size > 0
+    ):
+        return str(output)
+
+    url = get_steam_hero_url(
+        appid
+    )
+
+    if not url:
+        return None
+
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Steam-Banners/0.2"
+        }
+    )
+
+    try:
+        with urllib.request.urlopen(
+            request,
+            timeout=15
+        ) as response:
+
+            content_type = (
+                response.headers.get(
+                    "Content-Type",
+                    ""
+                )
+            )
+
+            if not content_type.startswith(
+                "image/"
+            ):
+                return None
+
+            image_data = response.read()
+
+        if not image_data:
+            return None
+
+        output.write_bytes(
+            image_data
+        )
+
+        return str(output)
+
+    except Exception:
         return None
 
 
@@ -324,31 +607,25 @@ def main():
     if not api_key:
         print(
             "SteamGridDB API key missing. "
-            "Returning games without images.",
+            "Steam artwork fallback will still be used.",
             file=sys.stderr
         )
-
-        print(
-            json.dumps(
-                games,
-                ensure_ascii=False
-            )
-        )
-
-        return
 
     for index, game in enumerate(
         games,
         start=1
     ):
-        appid = game.get("appid")
+        appid = game.get(
+            "appid"
+        )
+
         name = game.get(
             "name",
             "Unknown"
         )
 
         print(
-            f"SteamGridDB: "
+            f"Artwork: "
             f"{index}/{len(games)} - {name}",
             file=sys.stderr
         )
@@ -356,33 +633,71 @@ def main():
         if not appid:
             continue
 
-        sgdb_id = get_sgdb_game_id(
-            appid,
-            api_key
-        )
+        # ----------------------------------------------------
+        # SteamGridDB lookup
+        # ----------------------------------------------------
 
-        if not sgdb_id:
-            continue
+        sgdb_id = None
 
-        logo_url = get_logo_url(
-            sgdb_id,
-            api_key
-        )
-
-        if logo_url:
-            logo_path = download_logo(
-                logo_url,
-                appid
+        if api_key:
+            sgdb_id = get_sgdb_game_id(
+                appid,
+                api_key
             )
 
-            if logo_path:
-                game["logo"] = logo_path
-                game["logoUrl"] = logo_url
+        # ----------------------------------------------------
+        # LOGO
+        #
+        # SteamGridDB only for now.
+        # ----------------------------------------------------
 
-        hero_url = get_hero_url(
-            sgdb_id,
-            api_key
-        )
+        if sgdb_id:
+            logo_url = get_logo_url(
+                sgdb_id,
+                api_key
+            )
+
+            if logo_url:
+                logo_path = download_logo(
+                    logo_url,
+                    appid
+                )
+
+                if logo_path:
+                    game["logo"] = (
+                        logo_path
+                    )
+
+                    game["logoUrl"] = (
+                        logo_url
+                    )
+
+                    game["logoSource"] = (
+                        "steamgriddb"
+                    )
+
+        # ----------------------------------------------------
+        # HERO
+        #
+        # Priority:
+        #
+        # 1. SteamGridDB Hero
+        # 2. Local Steam librarycache
+        # 3. Steam CDN
+        # ----------------------------------------------------
+
+        hero_path = None
+        hero_url = None
+
+        if sgdb_id:
+            hero_url = get_hero_url(
+                sgdb_id,
+                api_key
+            )
+
+        # ----------------------------------------------------
+        # 1. SteamGridDB Hero
+        # ----------------------------------------------------
 
         if hero_url:
             hero_path = download_image(
@@ -392,8 +707,83 @@ def main():
             )
 
             if hero_path:
-                game["hero"] = hero_path
-                game["heroUrl"] = hero_url
+                game["hero"] = (
+                    hero_path
+                )
+
+                game["heroUrl"] = (
+                    hero_url
+                )
+
+                game["heroSource"] = (
+                    "steamgriddb"
+                )
+
+        # ----------------------------------------------------
+        # 2. Local Steam librarycache
+        # ----------------------------------------------------
+
+        if not hero_path:
+            local_steam_hero = (
+                copy_local_steam_hero(
+                    appid
+                )
+            )
+
+            if local_steam_hero:
+                hero_path = (
+                    local_steam_hero
+                )
+
+                game["hero"] = (
+                    local_steam_hero
+                )
+
+                game["heroSource"] = (
+                    "steam-local"
+                )
+
+                print(
+                    f"Local Steam Hero fallback: "
+                    f"{name}",
+                    file=sys.stderr
+                )
+
+        # ----------------------------------------------------
+        # 3. Steam CDN
+        # ----------------------------------------------------
+
+        if not hero_path:
+            steam_hero_path = (
+                download_steam_hero(
+                    appid
+                )
+            )
+
+            if steam_hero_path:
+                hero_path = (
+                    steam_hero_path
+                )
+
+                game["hero"] = (
+                    steam_hero_path
+                )
+
+                game["heroUrl"] = (
+                    get_steam_hero_url(
+                        appid
+                    )
+                )
+
+                game["heroSource"] = (
+                    "steam-cdn"
+                )
+
+                print(
+                    f"Steam CDN Hero fallback: "
+                    f"{name}",
+                    file=sys.stderr
+                )
 
     print(
         json.dumps(
