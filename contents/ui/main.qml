@@ -79,6 +79,8 @@ PlasmoidItem {
                 "Games:",
                 scanner.games.length
             )
+
+            gameGrid.artworkRevision += 1
         }
     }
 

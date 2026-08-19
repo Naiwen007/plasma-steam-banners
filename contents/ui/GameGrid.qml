@@ -10,6 +10,7 @@ GridView {
 
     property int columns: 2
     property int cardHeight: 120
+    property int artworkRevision: 0
     property int sortMode: 0
     property string searchText: ""
 
@@ -278,13 +279,13 @@ GridView {
                     anchors.fill: parent
 
                     source: heroContainer.visible
-                    ? "file://" + modelData.hero
+                    ? "file://" + modelData.hero + "?v=" + grid.artworkRevision
                     : ""
 
                     fillMode: Image.PreserveAspectCrop
 
                     asynchronous: true
-                    cache: true
+                    cache: false
                     smooth: true
                 }
 
@@ -372,13 +373,13 @@ GridView {
                          && modelData.logo !== ""
 
                 source: visible
-                    ? "file://" + modelData.logo
+                    ? "file://" + modelData.logo + "?v=" + grid.artworkRevision
                     : ""
 
                 fillMode: Image.PreserveAspectFit
 
                 asynchronous: true
-                cache: true
+                cache: false
                 smooth: true
 
                 opacity: mouseArea.containsMouse ? 1.0 : 0.94

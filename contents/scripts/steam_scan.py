@@ -19,9 +19,9 @@ except ImportError:
 SCRIPT_DIR = Path(__file__).resolve().parent
 ORIGINAL_SCANNER = SCRIPT_DIR / "steam_library_scan.py"
 
-DATA_DIR = SCRIPT_DIR.parent / "data"
-LOGO_DIR = DATA_DIR / "logos"
-HERO_DIR = DATA_DIR / "heroes"
+CACHE_DIR = Path.home() / ".cache" / "steambanners"
+LOGO_DIR = CACHE_DIR / "logos"
+HERO_DIR = CACHE_DIR / "heroes"
 
 KEY_FILE = Path.home() / ".config" / "steambanners" / "steamgriddb.key"
 
@@ -106,9 +106,6 @@ def get_sgdb_game_id(appid, api_key):
 
 
 def get_logo_urls(sgdb_id, api_key):
-    """
-    Return SteamGridDB logo URLs ordered by closeness to a 16:9 canvas.
-    """
     if not sgdb_id or not api_key:
         return []
 
@@ -122,33 +119,50 @@ def get_logo_urls(sgdb_id, api_key):
             api_key
         )
 
-        if data.get("success") and data.get("data"):
-            logos = data["data"]
+        if not data.get("success") or not data.get("data"):
+            return []
 
-            target_ratio = 16 / 9
+        logos = data["data"]
 
-            def ratio_distance(item):
-                width = item.get("width", 0)
-                height = item.get("height", 0)
+        def logo_priority(item):
+            style = item.get("style", "")
 
-                if width <= 0 or height <= 0:
-                    return 999
+            width = item.get("width", 0)
+            height = item.get("height", 0)
 
-                ratio = width / height
-
-                return abs(
-                    ratio - target_ratio
-                )
-
-            logos.sort(
-                key=ratio_distance
+            ratio = (
+                width / height
+                if width > 0 and height > 0
+                else 0
             )
 
-            return [
-                item.get("url")
-                for item in logos
-                if item.get("url")
-            ]
+            # Official artwork first
+            style_priority = (
+                0 if style == "official"
+                else 1
+            )
+
+            # Prefer naturally wide logos.
+            # Do not force them toward 16:9.
+            if ratio >= 2.0:
+                shape_priority = 0
+            else:
+                shape_priority = 1
+
+            return (
+                style_priority,
+                shape_priority
+            )
+
+        logos.sort(
+            key=logo_priority
+        )
+
+        return [
+            item.get("url")
+            for item in logos
+            if item.get("url")
+        ]
 
     except Exception as e:
         print(
