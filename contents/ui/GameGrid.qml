@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls as QQC2
 import SteamBanners.Process
+import Qt5Compat.GraphicalEffects
 
 GridView {
     id: grid
@@ -138,10 +139,10 @@ GridView {
     delegate: Item {
         id: delegateRoot
 
-        width: grid.cellWidth - 10
+        width: grid.cellWidth
         height: grid.cardHeight
 
-        scale: mouseArea.pressed ? 0.975 : 1.0
+        scale: mouseArea.pressed ? 0.988 : 1.0
 
         Behavior on scale {
             NumberAnimation {
@@ -170,10 +171,66 @@ GridView {
             }
         }
 
+        // 3D depth behind card
+        Rectangle {
+            id: cardDepth
+
+            x: card.x + 3
+            y: card.y + 4
+
+            width: card.width
+            height: card.height
+
+            radius: card.radius
+
+            color: mouseArea.containsMouse
+            ? "#0c384a"
+            : "#050d13"
+
+            border.color: mouseArea.containsMouse
+            ? "#1d6d8d"
+            : "#102530"
+
+            Behavior on color {
+                ColorAnimation {
+                    duration: 140
+                }
+            }
+
+            Behavior on border.color {
+                ColorAnimation {
+                    duration: 140
+                }
+            }
+        }
+
         Rectangle {
             id: card
 
             anchors.fill: parent
+            anchors.leftMargin: 5
+            anchors.rightMargin: 5
+
+            transform: Translate {
+                x: mouseArea.pressed ? 2 : 0
+                y: mouseArea.pressed
+                    ? 2
+                    : mouseArea.containsMouse
+                        ? -1
+                        : 0
+
+                Behavior on x {
+                    NumberAnimation {
+                        duration: 70
+                    }
+                }
+
+                Behavior on y {
+                    NumberAnimation {
+                        duration: 70
+                    }
+                }
+            }
 
             radius: 9
             color: "#0c151d"
@@ -198,64 +255,78 @@ GridView {
             // HERO BACKGROUND
             // ----------------------------------------------------
 
-            Image {
-                id: heroImage
+            Item {
+                id: heroContainer
 
                 anchors.fill: parent
-
                 visible: modelData.hero !== undefined
-                         && modelData.hero !== null
-                         && modelData.hero !== ""
+                && modelData.hero !== null
+                && modelData.hero !== ""
 
-                source: visible
+                layer.enabled: true
+                layer.effect: OpacityMask {
+                    maskSource: Rectangle {
+                        width: heroContainer.width
+                        height: heroContainer.height
+                        radius: card.radius
+                    }
+                }
+
+                Image {
+                    id: heroImage
+
+                    anchors.fill: parent
+
+                    source: heroContainer.visible
                     ? "file://" + modelData.hero
                     : ""
 
-                fillMode: Image.PreserveAspectCrop
+                    fillMode: Image.PreserveAspectCrop
 
-                asynchronous: true
-                cache: true
-                smooth: true
-            }
+                    asynchronous: true
+                    cache: true
+                    smooth: true
+                }
 
-            // Dark cinematic overlay
-            Rectangle {
-                anchors.fill: parent
+                // Dark cinematic overlay
+                Rectangle {
+                    anchors.fill: parent
 
-                gradient: Gradient {
-                    GradientStop {
-                        position: 0.0
-                        color: mouseArea.containsMouse
+                    gradient: Gradient {
+                        GradientStop {
+                            position: 0.0
+                            color: mouseArea.containsMouse
                             ? "#28040a10"
                             : "#3a040a10"
-                    }
+                        }
 
-                    GradientStop {
-                        position: 0.55
-                        color: mouseArea.containsMouse
+                        GradientStop {
+                            position: 0.55
+                            color: mouseArea.containsMouse
                             ? "#38050b11"
                             : "#50050b11"
-                    }
+                        }
 
-                    GradientStop {
-                        position: 1.0
-                        color: mouseArea.containsMouse
+                        GradientStop {
+                            position: 1.0
+                            color: mouseArea.containsMouse
                             ? "#6202070b"
                             : "#7802070b"
+                        }
                     }
                 }
-            }
 
-            // Slight blue tint
-            Rectangle {
-                anchors.fill: parent
+                // Slight blue tint
+                Rectangle {
+                    anchors.fill: parent
 
-                color: "#08192a"
-                opacity: mouseArea.containsMouse ? 0.08 : 0.14
+                    color: "#08192a"
+                    opacity: mouseArea.containsMouse ? 0.08 : 0.14
 
-                Behavior on opacity {
-                    NumberAnimation {
-                        duration: 140
+                    Behavior on opacity {
+                        NumberAnimation {
+                            duration: 140
+                        }
                     }
                 }
             }
@@ -264,13 +335,37 @@ GridView {
             // GAME LOGO
             // ----------------------------------------------------
 
+            // Tight 3D depth
+            DropShadow {
+
+                anchors.fill: gameLogo
+                source: gameLogo
+
+                horizontalOffset: 4
+                verticalOffset: 4
+
+                radius: 3
+                samples: 7
+                spread: 0.35
+
+                color: "#80304452"
+                transparentBorder: true
+
+                z: 1
+            }
+
             Image {
                 id: gameLogo
 
-                anchors.centerIn: parent
+                z: 2
 
-                width: parent.width * 0.72
-                height: parent.height * 0.62
+                anchors.centerIn: parent
+                anchors.fill: parent
+
+                anchors.leftMargin: 10
+                anchors.rightMargin: 10
+                anchors.topMargin: 7
+                anchors.bottomMargin: 7
 
                 visible: modelData.logo !== undefined
                          && modelData.logo !== null
@@ -337,22 +432,41 @@ GridView {
                 styleColor: "#66000000"
             }
 
-            // Subtle bottom highlight
+            // Soft top bevel highlight
             Rectangle {
                 anchors.left: parent.left
                 anchors.right: parent.right
-                anchors.bottom: parent.bottom
+                anchors.top: parent.top
 
-                height: 1
+                height: 8
 
-                color: mouseArea.containsMouse
-                    ? "#4fc7ff"
-                    : "#20435a"
+                color: "transparent"
 
-                opacity: mouseArea.containsMouse ? 0.9 : 0.55
+                gradient: Gradient {
+                    GradientStop {
+                        position: 0.0
+                        color: mouseArea.containsMouse
+                        ? "#806bdcff"
+                        : "#40477184"
+                    }
 
-                Behavior on color {
-                    ColorAnimation {
+                    GradientStop {
+                        position: 0.45
+                        color: mouseArea.containsMouse
+                        ? "#306bdcff"
+                        : "#20477184"
+                    }
+
+                    GradientStop {
+                        position: 1.0
+                        color: "#00477184"
+                    }
+                }
+
+                opacity: mouseArea.containsMouse ? 0.75 : 0.55
+
+                Behavior on opacity {
+                    NumberAnimation {
                         duration: 140
                     }
                 }

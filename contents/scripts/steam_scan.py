@@ -105,13 +105,16 @@ def get_sgdb_game_id(appid, api_key):
     return None
 
 
-def get_logo_url(sgdb_id, api_key):
+def get_logo_urls(sgdb_id, api_key):
+    """
+    Return SteamGridDB logo URLs ordered by closeness to a 16:9 canvas.
+    """
     if not sgdb_id or not api_key:
-        return None
+        return []
 
     try:
         params = urllib.parse.urlencode({
-            "limit": "1"
+            "limit": "10"
         })
 
         data = api_request(
@@ -120,7 +123,32 @@ def get_logo_url(sgdb_id, api_key):
         )
 
         if data.get("success") and data.get("data"):
-            return data["data"][0].get("url")
+            logos = data["data"]
+
+            target_ratio = 16 / 9
+
+            def ratio_distance(item):
+                width = item.get("width", 0)
+                height = item.get("height", 0)
+
+                if width <= 0 or height <= 0:
+                    return 999
+
+                ratio = width / height
+
+                return abs(
+                    ratio - target_ratio
+                )
+
+            logos.sort(
+                key=ratio_distance
+            )
+
+            return [
+                item.get("url")
+                for item in logos
+                if item.get("url")
+            ]
 
     except Exception as e:
         print(
@@ -129,7 +157,7 @@ def get_logo_url(sgdb_id, api_key):
             file=sys.stderr
         )
 
-    return None
+    return []
 
 
 def get_hero_url(sgdb_id, api_key):
@@ -327,10 +355,19 @@ def find_cached_logo(appid):
     if not LOGO_DIR.exists():
         return None, None
 
-    sgdb_file = LOGO_DIR / f"{appid}.png"
+    for suffix in [
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".webp"
+    ]:
+        sgdb_file = LOGO_DIR / f"{appid}{suffix}"
 
-    if sgdb_file.exists() and sgdb_file.stat().st_size > 0:
-        return str(sgdb_file), "steamgriddb-cache"
+        if (
+            sgdb_file.exists()
+            and sgdb_file.stat().st_size > 0
+        ):
+            return str(sgdb_file), "steamgriddb-cache"
 
     for suffix in [
         ".png",
@@ -409,6 +446,46 @@ def download_bytes(url):
         return response.read()
 
 
+def logo_has_transparent_background(image_data):
+    """
+    Return True when the image has enough real transparency to work
+    as an overlay logo. Opaque rectangular artwork is rejected.
+    """
+    if Image is None:
+        return True
+
+    try:
+        image = Image.open(
+            BytesIO(image_data)
+        ).convert("RGBA")
+
+        alpha = image.getchannel("A")
+        histogram = alpha.histogram()
+
+        total_pixels = image.width * image.height
+
+        if total_pixels <= 0:
+            return False
+
+        transparent_pixels = sum(
+            histogram[:32]
+        )
+
+        transparent_ratio = (
+            transparent_pixels / total_pixels
+        )
+
+        return transparent_ratio >= 0.02
+
+    except Exception as e:
+        print(
+            f"Could not inspect logo transparency: {e}",
+            file=sys.stderr
+        )
+
+        return False
+
+
 def normalize_logo(image_data, output):
     if Image is None:
         return False
@@ -421,7 +498,7 @@ def normalize_logo(image_data, output):
         alpha = image.getchannel("A")
 
         alpha_mask = alpha.point(
-            lambda value: 255 if value > 8 else 0
+            lambda value: 255 if value > 32 else 0
         )
 
         bbox = alpha_mask.getbbox()
@@ -433,13 +510,13 @@ def normalize_logo(image_data, output):
             return False
 
         padding_x = max(
-            8,
-            round(image.width * 0.05)
+            4,
+            round(image.width * 0.02)
         )
 
         padding_y = max(
-            8,
-            round(image.height * 0.05)
+            4,
+            round(image.height * 0.02)
         )
 
         canvas_width = (
@@ -488,7 +565,7 @@ def normalize_logo(image_data, output):
 # LOGOS
 # ============================================================
 
-def download_logo(url, appid):
+def download_logo(url, appid, overwrite=False):
     if not url:
         return None
 
@@ -500,13 +577,25 @@ def download_logo(url, appid):
     output = LOGO_DIR / f"{appid}.png"
 
     if (
-        output.exists()
+        not overwrite
+        and output.exists()
         and output.stat().st_size > 0
     ):
         return str(output)
 
     try:
         image_data = download_bytes(url)
+
+        if not logo_has_transparent_background(
+            image_data
+        ):
+            print(
+                f"Rejected SteamGridDB Logo without enough transparency "
+                f"for {appid}",
+                file=sys.stderr
+            )
+
+            return None
 
         if normalize_logo(
             image_data,
@@ -615,6 +704,75 @@ def copy_local_steam_logo(appid):
 # HEROES
 # ============================================================
 
+def normalize_hero(image_data, output, max_width=1280):
+    """
+    Cache hero artwork at a reasonable maximum width without upscaling.
+    """
+    if Image is None:
+        return False
+
+    try:
+        image = Image.open(
+            BytesIO(image_data)
+        )
+
+        # Never upscale smaller artwork
+        if image.width <= max_width:
+            output.write_bytes(image_data)
+            return True
+
+        new_height = round(
+            image.height
+            * max_width
+            / image.width
+        )
+
+        image = image.resize(
+            (
+                max_width,
+                new_height
+            ),
+            Image.Resampling.LANCZOS
+        )
+
+        suffix = output.suffix.lower()
+
+        if suffix in [".jpg", ".jpeg"]:
+            image = image.convert("RGB")
+
+            image.save(
+                output,
+                format="JPEG",
+                quality=88,
+                optimize=True
+            )
+
+        elif suffix == ".webp":
+            image.save(
+                output,
+                format="WEBP",
+                quality=88,
+                method=6
+            )
+
+        else:
+            image.save(
+                output,
+                format="PNG",
+                optimize=True
+            )
+
+        return True
+
+    except Exception as e:
+        print(
+            f"Hero normalization failed: {e}",
+            file=sys.stderr
+        )
+
+        return False
+
+
 def download_image(
     url,
     appid,
@@ -656,6 +814,12 @@ def download_image(
         image_data = download_bytes(
             url
         )
+
+        if normalize_hero(
+            image_data,
+        output
+        ):
+            return str(output)
 
         output.write_bytes(
             image_data
@@ -706,6 +870,14 @@ def copy_local_steam_hero(appid):
         return str(output)
 
     try:
+        image_data = source.read_bytes()
+
+        if normalize_hero(
+            image_data,
+            output
+        ):
+            return str(output)
+
         shutil.copy2(
             source,
             output
@@ -781,6 +953,12 @@ def download_steam_hero(appid):
 
         if not image_data:
             return None
+
+        if normalize_hero(
+            image_data,
+            output
+        ):
+            return str(output)
 
         output.write_bytes(
             image_data
@@ -871,21 +1049,43 @@ def refresh_artwork(game, api_key):
     logo_path = None
 
     if sgdb_id:
-        logo_url = get_logo_url(
+        logo_urls = get_logo_urls(
             sgdb_id,
             api_key
         )
 
-        if logo_url:
+        for logo_url in logo_urls:
             logo_path = download_logo(
                 logo_url,
-                appid
+                appid,
+                overwrite=True
             )
 
             if logo_path:
                 game["logo"] = logo_path
                 game["logoUrl"] = logo_url
                 game["logoSource"] = "steamgriddb"
+                break
+
+    if not logo_path:
+        # Remove stale SGDB Logo so startup cannot
+        # pick an old rejected opaque image.
+        for suffix in [
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".webp"
+        ]:
+            stale_logo = (
+                LOGO_DIR
+                / f"{appid}{suffix}"
+            )
+
+            if stale_logo.exists():
+                try:
+                    stale_logo.unlink()
+                except OSError:
+                    pass
 
     if not logo_path:
         local_logo = copy_local_steam_logo(
