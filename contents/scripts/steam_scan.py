@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import argparse
 import json
 import shutil
 import subprocess
@@ -31,6 +32,29 @@ STEAM_ASSET_BASE = (
 )
 
 
+# ============================================================
+# COMMAND LINE
+# ============================================================
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "--refresh-artwork",
+        action="store_true",
+        help=(
+            "Query SteamGridDB and update artwork. "
+            "Without this option only local/cache artwork is used."
+        )
+    )
+
+    return parser.parse_args()
+
+
+# ============================================================
+# STEAMGRIDDB
+# ============================================================
+
 def load_api_key():
     try:
         key = KEY_FILE.read_text().strip()
@@ -38,25 +62,6 @@ def load_api_key():
 
     except Exception:
         return None
-
-
-def run_original_scanner():
-    try:
-        result = subprocess.run(
-            [sys.executable, str(ORIGINAL_SCANNER)],
-            capture_output=True,
-            text=True,
-            check=True
-        )
-
-        return json.loads(result.stdout)
-
-    except Exception as e:
-        print(
-            f"Original Steam scanner failed: {e}",
-            file=sys.stderr
-        )
-        return []
 
 
 def api_request(url, api_key):
@@ -154,15 +159,32 @@ def get_hero_url(sgdb_id, api_key):
     return None
 
 
-def get_steam_hero_url(appid):
-    if not appid:
-        return None
+# ============================================================
+# INSTALLED STEAM GAMES
+# ============================================================
 
-    return (
-        f"{STEAM_ASSET_BASE}/"
-        f"{appid}/library_hero.jpg"
-    )
+def run_original_scanner():
+    try:
+        result = subprocess.run(
+            [sys.executable, str(ORIGINAL_SCANNER)],
+            capture_output=True,
+            text=True,
+            check=True
+        )
 
+        return json.loads(result.stdout)
+
+    except Exception as e:
+        print(
+            f"Original Steam scanner failed: {e}",
+            file=sys.stderr
+        )
+        return []
+
+
+# ============================================================
+# STEAM LIBRARY CACHE
+# ============================================================
 
 def steam_library_cache_roots():
     candidates = [
@@ -187,18 +209,6 @@ def steam_library_cache_roots():
 
 
 def find_local_steam_hero(appid):
-    """
-    Find Steam's locally cached Library Hero.
-
-    Steam may store it directly under:
-
-        librarycache/<appid>/library_hero.jpg
-
-    or inside a hash directory:
-
-        librarycache/<appid>/<hash>/library_hero.jpg
-    """
-
     if not appid:
         return None
 
@@ -254,18 +264,6 @@ def find_local_steam_hero(appid):
 
 
 def find_local_steam_logo(appid):
-    """
-    Find Steam's locally cached game logo.
-
-    Steam may store it directly under:
-
-        librarycache/<appid>/logo.png
-
-    or inside a hash directory:
-
-        librarycache/<appid>/<hash>/logo.png
-    """
-
     if not appid:
         return None
 
@@ -317,6 +315,85 @@ def find_local_steam_logo(appid):
     return None
 
 
+# ============================================================
+# EXISTING STEAM BANNERS CACHE
+# ============================================================
+
+def find_cached_logo(appid):
+    """
+    Prefer existing SteamGridDB artwork over Steam fallback.
+    """
+
+    if not LOGO_DIR.exists():
+        return None, None
+
+    sgdb_file = LOGO_DIR / f"{appid}.png"
+
+    if sgdb_file.exists() and sgdb_file.stat().st_size > 0:
+        return str(sgdb_file), "steamgriddb-cache"
+
+    for suffix in [
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".webp"
+    ]:
+        steam_file = LOGO_DIR / f"{appid}_steam{suffix}"
+
+        if (
+            steam_file.exists()
+            and steam_file.stat().st_size > 0
+        ):
+            return str(steam_file), "steam-local-cache"
+
+    return None, None
+
+
+def find_cached_hero(appid):
+    """
+    Prefer existing SteamGridDB artwork over Steam fallback.
+    """
+
+    if not HERO_DIR.exists():
+        return None, None
+
+    # SteamGridDB files use <appid>.<ext>
+    for suffix in [
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp"
+    ]:
+        sgdb_file = HERO_DIR / f"{appid}{suffix}"
+
+        if (
+            sgdb_file.exists()
+            and sgdb_file.stat().st_size > 0
+        ):
+            return str(sgdb_file), "steamgriddb-cache"
+
+    # Steam fallback files use <appid>_steam.<ext>
+    for suffix in [
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp"
+    ]:
+        steam_file = HERO_DIR / f"{appid}_steam{suffix}"
+
+        if (
+            steam_file.exists()
+            and steam_file.stat().st_size > 0
+        ):
+            return str(steam_file), "steam-cache"
+
+    return None, None
+
+
+# ============================================================
+# IMAGE HELPERS
+# ============================================================
+
 def download_bytes(url):
     request = urllib.request.Request(
         url,
@@ -341,7 +418,6 @@ def normalize_logo(image_data, output):
             BytesIO(image_data)
         ).convert("RGBA")
 
-        # Trim almost-transparent outer pixels.
         alpha = image.getchannel("A")
 
         alpha_mask = alpha.point(
@@ -356,7 +432,6 @@ def normalize_logo(image_data, output):
         if image.width <= 0 or image.height <= 0:
             return False
 
-        # Add proportional transparent padding.
         padding_x = max(
             8,
             round(image.width * 0.05)
@@ -409,11 +484,11 @@ def normalize_logo(image_data, output):
         return False
 
 
-def download_logo(url, appid):
-    """
-    Download and normalize a SteamGridDB logo.
-    """
+# ============================================================
+# LOGOS
+# ============================================================
 
+def download_logo(url, appid):
     if not url:
         return None
 
@@ -439,7 +514,6 @@ def download_logo(url, appid):
         ):
             return str(output)
 
-        # Pillow missing or normalization failed.
         suffix = Path(
             urllib.parse.urlparse(
                 url
@@ -462,13 +536,6 @@ def download_logo(url, appid):
             image_data
         )
 
-        if Image is None:
-            print(
-                "Pillow is not installed; "
-                "logo normalization was skipped.",
-                file=sys.stderr
-            )
-
         return str(fallback)
 
     except Exception as e:
@@ -482,13 +549,6 @@ def download_logo(url, appid):
 
 
 def copy_local_steam_logo(appid):
-    """
-    Copy and normalize Steam's locally cached logo.
-
-    Steam logos use a separate filename so they do not
-    interfere with a future SteamGridDB logo for the same game.
-    """
-
     source = find_local_steam_logo(appid)
 
     if not source:
@@ -519,8 +579,6 @@ def copy_local_steam_logo(appid):
         ):
             return str(output)
 
-        # If Pillow is unavailable or normalization fails,
-        # preserve the original Steam logo as a fallback.
         suffix = source.suffix.lower()
 
         if suffix not in [
@@ -552,6 +610,10 @@ def copy_local_steam_logo(appid):
 
         return None
 
+
+# ============================================================
+# HEROES
+# ============================================================
 
 def download_image(
     url,
@@ -612,11 +674,6 @@ def download_image(
 
 
 def copy_local_steam_hero(appid):
-    """
-    Copy Steam's already cached Library Hero into the
-    Steam Banners runtime artwork directory.
-    """
-
     source = find_local_steam_hero(appid)
 
     if not source:
@@ -666,11 +723,17 @@ def copy_local_steam_hero(appid):
         return None
 
 
-def download_steam_hero(appid):
-    """
-    Final Hero fallback: try Steam's public CDN.
-    """
+def get_steam_hero_url(appid):
+    if not appid:
+        return None
 
+    return (
+        f"{STEAM_ASSET_BASE}/"
+        f"{appid}/library_hero.jpg"
+    )
+
+
+def download_steam_hero(appid):
     if not appid:
         return None
 
@@ -693,32 +756,25 @@ def download_steam_hero(appid):
         appid
     )
 
-    if not url:
-        return None
-
-    request = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": "Steam-Banners/0.2"
-        }
-    )
-
     try:
+        request = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "Steam-Banners/0.2"
+            }
+        )
+
         with urllib.request.urlopen(
             request,
             timeout=15
         ) as response:
 
-            content_type = (
-                response.headers.get(
-                    "Content-Type",
-                    ""
-                )
+            content_type = response.headers.get(
+                "Content-Type",
+                ""
             )
 
-            if not content_type.startswith(
-                "image/"
-            ):
+            if not content_type.startswith("image/"):
                 return None
 
             image_data = response.read()
@@ -736,78 +792,89 @@ def download_steam_hero(appid):
         return None
 
 
-def main():
-    games = run_original_scanner()
+# ============================================================
+# FAST LOCAL ARTWORK
+# ============================================================
 
-    if not games:
-        print("[]")
+def apply_local_artwork(game):
+    appid = game.get("appid")
+
+    if not appid:
         return
 
-    api_key = load_api_key()
+    # --------------------------------------------------------
+    # Logo
+    # --------------------------------------------------------
 
-    if not api_key:
-        print(
-            "SteamGridDB API key missing. "
-            "Steam artwork fallback will still be used.",
-            file=sys.stderr
+    logo_path, logo_source = find_cached_logo(
+        appid
+    )
+
+    if logo_path:
+        game["logo"] = logo_path
+        game["logoSource"] = logo_source
+
+    else:
+        local_logo = copy_local_steam_logo(
+            appid
         )
 
-    for index, game in enumerate(
-        games,
-        start=1
-    ):
-        appid = game.get(
-            "appid"
+        if local_logo:
+            game["logo"] = local_logo
+            game["logoSource"] = "steam-local"
+
+    # --------------------------------------------------------
+    # Hero
+    # --------------------------------------------------------
+
+    hero_path, hero_source = find_cached_hero(
+        appid
+    )
+
+    if hero_path:
+        game["hero"] = hero_path
+        game["heroSource"] = hero_source
+
+    else:
+        local_hero = copy_local_steam_hero(
+            appid
         )
 
-        name = game.get(
-            "name",
-            "Unknown"
+        if local_hero:
+            game["hero"] = local_hero
+            game["heroSource"] = "steam-local"
+
+
+# ============================================================
+# FULL ARTWORK REFRESH
+# ============================================================
+
+def refresh_artwork(game, api_key):
+    appid = game.get("appid")
+    name = game.get("name", "Unknown")
+
+    if not appid:
+        return
+
+    sgdb_id = None
+
+    if api_key:
+        sgdb_id = get_sgdb_game_id(
+            appid,
+            api_key
         )
 
-        print(
-            f"Artwork: "
-            f"{index}/{len(games)} - {name}",
-            file=sys.stderr
+    # ========================================================
+    # LOGO
+    # ========================================================
+
+    logo_path = None
+
+    if sgdb_id:
+        logo_url = get_logo_url(
+            sgdb_id,
+            api_key
         )
-
-        if not appid:
-            continue
-
-        # ----------------------------------------------------
-        # SteamGridDB lookup
-        # ----------------------------------------------------
-
-        sgdb_id = None
-
-        if api_key:
-            sgdb_id = get_sgdb_game_id(
-                appid,
-                api_key
-            )
-
-        # ====================================================
-        # LOGO
-        #
-        # Priority:
-        #
-        # 1. SteamGridDB Logo
-        # 2. Local Steam librarycache logo
-        # 3. Text fallback handled by QML
-        # ====================================================
-
-        logo_path = None
-        logo_url = None
-
-        # ----------------------------------------------------
-        # 1. SteamGridDB Logo
-        # ----------------------------------------------------
-
-        if sgdb_id:
-            logo_url = get_logo_url(
-                sgdb_id,
-                api_key
-            )
 
         if logo_url:
             logo_path = download_logo(
@@ -816,70 +883,35 @@ def main():
             )
 
             if logo_path:
-                game["logo"] = (
-                    logo_path
-                )
+                game["logo"] = logo_path
+                game["logoUrl"] = logo_url
+                game["logoSource"] = "steamgriddb"
 
-                game["logoUrl"] = (
-                    logo_url
-                )
+    if not logo_path:
+        local_logo = copy_local_steam_logo(
+            appid
+        )
 
-                game["logoSource"] = (
-                    "steamgriddb"
-                )
+        if local_logo:
+            game["logo"] = local_logo
+            game["logoSource"] = "steam-local"
 
-        # ----------------------------------------------------
-        # 2. Local Steam Logo
-        # ----------------------------------------------------
-
-        if not logo_path:
-            local_steam_logo = (
-                copy_local_steam_logo(
-                    appid
-                )
+            print(
+                f"Local Steam Logo fallback: {name}",
+                file=sys.stderr
             )
 
-            if local_steam_logo:
-                logo_path = (
-                    local_steam_logo
-                )
+    # ========================================================
+    # HERO
+    # ========================================================
 
-                game["logo"] = (
-                    local_steam_logo
-                )
+    hero_path = None
 
-                game["logoSource"] = (
-                    "steam-local"
-                )
-
-                print(
-                    f"Local Steam Logo fallback: "
-                    f"{name}",
-                    file=sys.stderr
-                )
-
-        # ====================================================
-        # HERO
-        #
-        # Priority:
-        #
-        # 1. SteamGridDB Hero
-        # 2. Local Steam librarycache
-        # 3. Steam CDN
-        # ====================================================
-
-        hero_path = None
-        hero_url = None
-
-        if sgdb_id:
-            hero_url = get_hero_url(
-                sgdb_id,
-                api_key
-            )
-
-        # ----------------------------------------------------
-        # 1. SteamGridDB Hero
-        # ----------------------------------------------------
+    if sgdb_id:
+        hero_url = get_hero_url(
+            sgdb_id,
+            api_key
+        )
 
         if hero_url:
             hero_path = download_image(
@@ -889,83 +921,95 @@ def main():
             )
 
             if hero_path:
-                game["hero"] = (
-                    hero_path
-                )
+                game["hero"] = hero_path
+                game["heroUrl"] = hero_url
+                game["heroSource"] = "steamgriddb"
 
-                game["heroUrl"] = (
-                    hero_url
-                )
+    if not hero_path:
+        local_hero = copy_local_steam_hero(
+            appid
+        )
 
-                game["heroSource"] = (
-                    "steamgriddb"
-                )
+        if local_hero:
+            hero_path = local_hero
 
-        # ----------------------------------------------------
-        # 2. Local Steam librarycache
-        # ----------------------------------------------------
+            game["hero"] = local_hero
+            game["heroSource"] = "steam-local"
 
-        if not hero_path:
-            local_steam_hero = (
-                copy_local_steam_hero(
-                    appid
-                )
+            print(
+                f"Local Steam Hero fallback: {name}",
+                file=sys.stderr
             )
 
-            if local_steam_hero:
-                hero_path = (
-                    local_steam_hero
-                )
+    if not hero_path:
+        cdn_hero = download_steam_hero(
+            appid
+        )
 
-                game["hero"] = (
-                    local_steam_hero
-                )
+        if cdn_hero:
+            game["hero"] = cdn_hero
+            game["heroUrl"] = get_steam_hero_url(
+                appid
+            )
+            game["heroSource"] = "steam-cdn"
 
-                game["heroSource"] = (
-                    "steam-local"
-                )
-
-                print(
-                    f"Local Steam Hero fallback: "
-                    f"{name}",
-                    file=sys.stderr
-                )
-
-        # ----------------------------------------------------
-        # 3. Steam CDN
-        # ----------------------------------------------------
-
-        if not hero_path:
-            steam_hero_path = (
-                download_steam_hero(
-                    appid
-                )
+            print(
+                f"Steam CDN Hero fallback: {name}",
+                file=sys.stderr
             )
 
-            if steam_hero_path:
-                hero_path = (
-                    steam_hero_path
-                )
 
-                game["hero"] = (
-                    steam_hero_path
-                )
+# ============================================================
+# MAIN
+# ============================================================
 
-                game["heroUrl"] = (
-                    get_steam_hero_url(
-                        appid
-                    )
-                )
+def main():
+    args = parse_args()
 
-                game["heroSource"] = (
-                    "steam-cdn"
-                )
+    games = run_original_scanner()
 
-                print(
-                    f"Steam CDN Hero fallback: "
-                    f"{name}",
-                    file=sys.stderr
-                )
+    if not games:
+        print("[]")
+        return
+
+    api_key = load_api_key()
+
+    if args.refresh_artwork:
+        print(
+            "### FULL ARTWORK REFRESH ###",
+            file=sys.stderr
+        )
+
+    else:
+        print(
+            "### FAST LOCAL SCAN ###",
+            file=sys.stderr
+        )
+
+    for index, game in enumerate(
+        games,
+        start=1
+    ):
+        name = game.get(
+            "name",
+            "Unknown"
+        )
+
+        print(
+            f"{index}/{len(games)} - {name}",
+            file=sys.stderr
+        )
+
+        if args.refresh_artwork:
+            refresh_artwork(
+                game,
+                api_key
+            )
+
+        else:
+            apply_local_artwork(
+                game
+            )
 
     print(
         json.dumps(

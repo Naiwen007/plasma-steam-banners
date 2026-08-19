@@ -103,7 +103,7 @@ PlasmoidItem {
 
             onClicked: {
                 if (!scanner.scanning) {
-                    scanner.scan()
+                    scanner.scan(true)
                 }
             }
 
@@ -477,6 +477,6 @@ PlasmoidItem {
             ]
         )
 
-        scanner.scan()
+        scanner.scan(false)
     }
 }
