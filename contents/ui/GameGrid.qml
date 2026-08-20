@@ -210,21 +210,37 @@ GridView {
             }
         }
 
-        // Subtle outer glow on hover
+        // Outer glow for hover and favorites
         Rectangle {
             anchors.fill: card
-            anchors.margins: -2
+            anchors.margins: -3
 
-            radius: card.radius + 2
+            radius: card.radius + 3
             color: "transparent"
 
-            border.width: 1
-            border.color: "#28a9e8"
+            border.width:
+            grid.isFavorite(modelData.appid)
+            ? 2
+            : 1
 
-            opacity: mouseArea.containsMouse ? 0.55 : 0.0
+            border.color:
+            grid.isFavorite(modelData.appid)
+            ? "#ffd34e"
+            : "#28a9e8"
+
+            opacity:
+            grid.isFavorite(modelData.appid)
+            ? (mouseArea.containsMouse ? 0.90 : 0.60)
+            : (mouseArea.containsMouse ? 0.55 : 0.0)
 
             Behavior on opacity {
                 NumberAnimation {
+                    duration: 140
+                }
+            }
+
+            Behavior on border.color {
+                ColorAnimation {
                     duration: 140
                 }
             }
@@ -470,6 +486,42 @@ GridView {
             }
 
             // ----------------------------------------------------
+            // FAVORITE HIGHLIGHT
+            // ----------------------------------------------------
+
+            Rectangle {
+                z: 4
+
+                anchors.fill: parent
+                anchors.margins: 1
+
+                radius: card.radius - 1
+
+                visible: grid.isFavorite(modelData.appid)
+
+                color: Qt.rgba(
+                    1.0,
+                    0.78,
+                    0.15,
+                    mouseArea.containsMouse ? 0.08 : 0.04
+                )
+
+                border.width: 2
+                border.color: "#ffd34e"
+
+                opacity:
+                mouseArea.containsMouse
+                ? 1.0
+                : 0.82
+
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: 140
+                    }
+                }
+            }
+
+            // ----------------------------------------------------
             // FAVORITE STAR
             // ----------------------------------------------------
 
@@ -480,12 +532,14 @@ GridView {
                 anchors.topMargin: 7
                 anchors.rightMargin: 9
 
+                z: 5
+
                 visible: grid.isFavorite(modelData.appid)
 
                 text: "★"
                 color: "#ffd34e"
 
-                font.pixelSize: 18
+                font.pixelSize: 22
 
                 style: Text.Outline
                 styleColor: "#66000000"
