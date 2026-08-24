@@ -21,6 +21,7 @@ PlasmoidItem {
 
     property bool searchOpen: false
     property int artworkChooserAppid: 0
+    property string artworkChooserType: ""
 
     property bool noGamesFound:
     !scanner.scanning
@@ -1237,6 +1238,12 @@ PlasmoidItem {
             }
 
             onChooseHeroRequested: function(appid) {
+                root.artworkChooserType = "hero"
+                scanner.loadArtworkOptions(appid)
+            }
+
+            onChooseLogoRequested: function(appid) {
+                root.artworkChooserType = "logo"
                 scanner.loadArtworkOptions(appid)
             }
 
@@ -1452,7 +1459,10 @@ PlasmoidItem {
                         parent.width
                         - closeHeroChooser.width
 
-                        text: i18n("Choose hero artwork")
+                        text:
+                        root.artworkChooserType === "logo"
+                        ? i18n("Choose logo artwork")
+                        : i18n("Choose hero artwork")
 
                         font.pixelSize: 18
                         font.bold: true
@@ -1490,7 +1500,9 @@ PlasmoidItem {
                     cellHeight: 150
 
                     model:
-                    scanner.artworkHeroes
+                        root.artworkChooserType === "logo"
+                        ? scanner.artworkLogos
+                        : scanner.artworkHeroes
 
                     delegate: Item {
                         width:
@@ -1519,7 +1531,9 @@ PlasmoidItem {
                                 source: modelData
 
                                 fillMode:
-                                Image.PreserveAspectCrop
+                                    root.artworkChooserType === "logo"
+                                    ? Image.PreserveAspectFit
+                                    : Image.PreserveAspectCrop
 
                                 asynchronous: true
                             }
@@ -1536,7 +1550,7 @@ PlasmoidItem {
                                 onClicked: {
                                     scanner.selectArtwork(
                                         root.artworkChooserAppid,
-                                        "hero",
+                                        root.artworkChooserType,
                                         modelData
                                     )
                                 }

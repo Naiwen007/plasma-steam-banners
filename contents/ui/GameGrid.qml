@@ -714,6 +714,18 @@ GridView {
                     }
                 }
 
+                QQC2.MenuItem {
+                    text: i18n("Choose logo artwork")
+
+                    enabled: !grid.scanBusy
+
+                    onTriggered: {
+                        grid.chooseLogoRequested(
+                            modelData.appid
+                        )
+                    }
+                }
+
             }
 
             // ----------------------------------------------------
