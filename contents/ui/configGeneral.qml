@@ -19,10 +19,25 @@ Kirigami.FormLayout {
     property bool updateAvailable: false
     property string updateReleaseUrl: ""
     property string updateAssetUrl: ""
+    property bool updateInstalling: false
+    property string installOutput: ""
+    property bool updateInstalled: false
 
     property string updateScriptPath: {
         var url = Qt.resolvedUrl(
             "../scripts/update_check.py"
+        ).toString()
+
+        if (url.startsWith("file://")) {
+            url = url.substring(7)
+        }
+
+        return decodeURIComponent(url)
+    }
+
+    property string updateInstallScriptPath: {
+        var url = Qt.resolvedUrl(
+            "../scripts/update_install.py"
         ).toString()
 
         if (url.startsWith("file://")) {
@@ -147,6 +162,83 @@ Kirigami.FormLayout {
                 updateStatus.text =
                 i18n("Could not check for updates.")
             }
+        }
+    }
+
+    Process {
+        id: updateInstaller
+
+        onOutputReady: function(output) {
+            root.installOutput += output
+        }
+
+        onErrorOccurred: function(error) {
+            console.log(
+                "### UPDATE INSTALL ERROR:",
+                error
+            )
+
+            root.updateInstalling = false
+
+            updateStatus.text =
+            i18n("Update failed.")
+        }
+
+        onFinished: function(exitCode) {
+            console.log(
+                "### UPDATE INSTALL FINISHED:",
+                exitCode
+            )
+
+            root.updateInstalling = false
+
+            try {
+                var result = JSON.parse(
+                    root.installOutput
+                )
+
+                if (!result.success) {
+                    updateStatus.text =
+                    result.error
+                    || i18n("Update failed.")
+
+                    return
+                }
+
+                root.updateInstalled = true
+                root.updateAvailable = false
+                root.installedVersion =
+                result.installed_version || ""
+
+                updateStatus.text =
+                i18n(
+                    "Updated to version %1. Restart Plasma to finish.",
+                     root.installedVersion
+                )
+
+            } catch (error) {
+                console.log(
+                    "### UPDATE INSTALL JSON ERROR:",
+                    error
+                )
+
+                updateStatus.text =
+                i18n("Update failed.")
+            }
+        }
+    }
+
+    Process {
+        id: plasmaRestarter
+
+        onErrorOccurred: function(error) {
+            console.log(
+                "### PLASMA RESTART ERROR:",
+                error
+            )
+
+            updateStatus.text =
+            i18n("Could not restart Plasma.")
         }
     }
 
@@ -369,6 +461,42 @@ Kirigami.FormLayout {
             QQC2.Button {
                 visible:
                 root.updateAvailable
+                && root.updateAssetUrl !== ""
+
+                text: root.updateInstalling
+                ? i18n("Updating...")
+                : i18n(
+                    "Update to %1",
+                    root.latestVersion
+                )
+
+                enabled:
+                !root.updateChecking
+                && !root.updateInstalling
+
+                onClicked: {
+                    root.updateInstalling = true
+                    root.installOutput = ""
+                    root.updateInstalled = false
+
+                    updateStatus.text =
+                    i18n(
+                        "Downloading and installing version %1...",
+                         root.latestVersion
+                    )
+
+                    updateInstaller.start(
+                        "python3",
+                        [
+                            root.updateInstallScriptPath
+                        ]
+                    )
+                }
+            }
+
+            QQC2.Button {
+                visible:
+                root.updateAvailable
                 && root.updateReleaseUrl !== ""
 
                 text: i18n("View release")
@@ -378,6 +506,22 @@ Kirigami.FormLayout {
                         root.updateReleaseUrl
                     )
                 }
+            }
+        }
+
+        QQC2.Button {
+            visible: root.updateInstalled
+
+            text: i18n("Restart Plasma")
+
+            onClicked: {
+                plasmaRestarter.start(
+                    "sh",
+                    [
+                        "-c",
+                        "nohup plasmashell --replace > /tmp/plasmashell.log 2>&1 &"
+                    ]
+                )
             }
         }
 
