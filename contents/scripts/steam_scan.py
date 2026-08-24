@@ -58,6 +58,26 @@ def parse_args():
         )
     )
 
+    parser.add_argument(
+        "--list-artwork-appid",
+        type=int,
+        default=None,
+        help=(
+            "List available SteamGridDB artwork for one Steam app ID."
+        )
+    )
+
+    parser.add_argument(
+        "--select-artwork",
+        nargs=3,
+        metavar=("APPID", "TYPE", "URL"),
+        default=None,
+        help=(
+            "Save selected SteamGridDB artwork. "
+            "TYPE must be logo or hero."
+        )
+    )
+
     return parser.parse_args()
 
 
@@ -184,13 +204,13 @@ def get_logo_urls(sgdb_id, api_key):
     return []
 
 
-def get_hero_url(sgdb_id, api_key):
+def get_hero_urls(sgdb_id, api_key):
     if not sgdb_id or not api_key:
-        return None
+        return []
 
     try:
         params = urllib.parse.urlencode({
-            "limit": "1"
+            "limit": "10"
         })
 
         data = api_request(
@@ -198,8 +218,14 @@ def get_hero_url(sgdb_id, api_key):
             api_key
         )
 
-        if data.get("success") and data.get("data"):
-            return data["data"][0].get("url")
+        if not data.get("success") or not data.get("data"):
+            return []
+
+        return [
+            item.get("url")
+            for item in data["data"]
+            if item.get("url")
+        ]
 
     except Exception as e:
         print(
@@ -208,12 +234,166 @@ def get_hero_url(sgdb_id, api_key):
             file=sys.stderr
         )
 
-    return None
+    return []
+
+
+def get_hero_url(sgdb_id, api_key):
+    urls = get_hero_urls(
+        sgdb_id,
+        api_key
+    )
+
+    return urls[0] if urls else None
 
 
 # ============================================================
 # INSTALLED STEAM GAMES
 # ============================================================
+
+def list_artwork_options(appid):
+    api_key = load_api_key()
+
+    if not api_key:
+        return {
+            "success": False,
+            "error": "SteamGridDB API key is not configured."
+        }
+
+    sgdb_id = get_sgdb_game_id(
+        appid,
+        api_key
+    )
+
+    if not sgdb_id:
+        return {
+            "success": False,
+            "error": "Game was not found on SteamGridDB."
+        }
+
+    return {
+        "success": True,
+        "appid": appid,
+        "sgdb_id": sgdb_id,
+        "logos": get_logo_urls(
+            sgdb_id,
+            api_key
+        ),
+        "heroes": get_hero_urls(
+            sgdb_id,
+            api_key
+        )
+    }
+
+def remove_old_artwork_variants(
+    appid,
+    target_dir,
+    keep_path
+):
+    keep_path = Path(keep_path).resolve()
+
+    for suffix in [
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp"
+    ]:
+        candidate = (
+            target_dir / f"{appid}{suffix}"
+        )
+
+        if not candidate.exists():
+            continue
+
+        if candidate.resolve() == keep_path:
+            continue
+
+        try:
+            candidate.unlink()
+
+        except Exception as e:
+            print(
+                f"Could not remove old artwork "
+                f"{candidate}: {e}",
+                file=sys.stderr
+            )
+
+
+def save_selected_artwork(
+    appid,
+    artwork_type,
+    url
+):
+    parsed_url = urllib.parse.urlparse(url)
+
+    hostname = (
+        parsed_url.hostname or ""
+    ).lower()
+
+    valid_host = (
+        hostname == "steamgriddb.com"
+        or hostname.endswith(
+            ".steamgriddb.com"
+        )
+    )
+
+    if (
+        parsed_url.scheme != "https"
+        or not valid_host
+    ):
+        return {
+            "success": False,
+            "error": (
+                "Invalid SteamGridDB artwork URL."
+            )
+        }
+
+    if artwork_type == "logo":
+        path = download_logo(
+            url,
+            appid,
+            overwrite=True
+        )
+
+        target_dir = LOGO_DIR
+
+    elif artwork_type == "hero":
+        path = download_image(
+            url,
+            appid,
+            HERO_DIR,
+            overwrite=True
+        )
+
+        target_dir = HERO_DIR
+
+    else:
+        return {
+            "success": False,
+            "error": "Unknown artwork type."
+        }
+
+    if not path:
+        return {
+            "success": False,
+            "error": (
+                f"Could not save selected "
+                f"{artwork_type}."
+            )
+        }
+
+    remove_old_artwork_variants(
+        appid,
+        target_dir,
+        path
+    )
+
+    return {
+        "success": True,
+        "appid": appid,
+        "type": artwork_type,
+        "path": path,
+        "url": url
+    }
 
 def run_original_scanner():
     try:
@@ -800,7 +980,8 @@ def normalize_hero(image_data, output, max_width=1280):
 def download_image(
     url,
     appid,
-    target_dir
+    target_dir,
+    overwrite=False
 ):
     if not url:
         return None
@@ -829,7 +1010,8 @@ def download_image(
     )
 
     if (
-        output.exists()
+        not overwrite
+        and output.exists()
         and output.stat().st_size > 0
     ):
         return str(output)
@@ -1374,6 +1556,48 @@ def refresh_artwork(game, api_key):
 
 def main():
     args = parse_args()
+
+    if args.select_artwork is not None:
+        appid_text, artwork_type, url = (
+            args.select_artwork
+        )
+
+        try:
+            appid = int(appid_text)
+
+        except ValueError:
+            print(json.dumps({
+                "success": False,
+                "error": "Invalid Steam app ID."
+            }))
+            return
+
+        result = save_selected_artwork(
+            appid,
+            artwork_type,
+            url
+        )
+
+        print(
+            json.dumps(
+                result,
+                ensure_ascii=False
+            )
+        )
+        return
+
+    if args.list_artwork_appid is not None:
+        result = list_artwork_options(
+            args.list_artwork_appid
+        )
+
+        print(
+            json.dumps(
+                result,
+                ensure_ascii=False
+            )
+        )
+        return
 
     games = run_original_scanner()
 

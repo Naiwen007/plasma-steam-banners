@@ -20,6 +20,7 @@ PlasmoidItem {
         libraryWarningVisible ? 72 : 0
 
     property bool searchOpen: false
+    property int artworkChooserAppid: 0
 
     property bool noGamesFound:
     !scanner.scanning
@@ -96,6 +97,23 @@ PlasmoidItem {
             )
 
             gameGrid.refreshSingleArtwork(appid)
+        }
+
+        onArtworkOptionsFinished: function(appid) {
+            root.artworkChooserAppid = appid
+            heroChooserPopup.open()
+        }
+
+        onArtworkSelectionFinished: function(
+            appid,
+            artworkType,
+            path
+        ) {
+            heroChooserPopup.close()
+
+            gameGrid.refreshSingleArtwork(
+                appid
+            )
         }
 
     }
@@ -1217,6 +1235,11 @@ PlasmoidItem {
                     favoritesString
                 }
             }
+
+            onChooseHeroRequested: function(appid) {
+                scanner.loadArtworkOptions(appid)
+            }
+
         }
 
         // ========================================================
@@ -1368,6 +1391,157 @@ PlasmoidItem {
                         root.searchOpen = true
 
                         searchField.forceActiveFocus()
+                    }
+                }
+            }
+        }
+    }
+
+    // ============================================================
+    // HERO ARTWORK CHOOSER
+    // ============================================================
+
+    QQC2.Popup {
+        id: heroChooserPopup
+
+        anchors.centerIn: parent
+
+        width: Math.min(
+            root.width - 40,
+            560
+        )
+
+        height: Math.min(
+            root.height - 40,
+            420
+        )
+
+        modal: true
+        focus: true
+
+        closePolicy:
+        QQC2.Popup.CloseOnEscape
+        | QQC2.Popup.CloseOnPressOutside
+
+        background: Rectangle {
+            radius: 12
+
+            color: "#0b141c"
+
+            border.width: 1
+            border.color: "#2a6f8d"
+        }
+
+        contentItem: Item {
+            Column {
+                anchors.fill: parent
+
+                anchors.margins: 14
+
+                spacing: 12
+
+                Row {
+                    width: parent.width
+                    height: 32
+
+                    QQC2.Label {
+                        anchors.verticalCenter:
+                        parent.verticalCenter
+
+                        width:
+                        parent.width
+                        - closeHeroChooser.width
+
+                        text: i18n("Choose hero artwork")
+
+                        font.pixelSize: 18
+                        font.bold: true
+
+                        color: "#eef6fb"
+                    }
+
+                    QQC2.ToolButton {
+                        id: closeHeroChooser
+
+                        width: 32
+                        height: 32
+
+                        text: "×"
+
+                        onClicked:
+                        heroChooserPopup.close()
+                    }
+                }
+
+                GridView {
+                    id: heroChooserGrid
+
+                    width: parent.width
+
+                    height:
+                    parent.height
+                    - 44
+
+                    clip: true
+
+                    cellWidth:
+                    width / 2
+
+                    cellHeight: 150
+
+                    model:
+                    scanner.artworkHeroes
+
+                    delegate: Item {
+                        width:
+                        heroChooserGrid.cellWidth
+
+                        height:
+                        heroChooserGrid.cellHeight
+
+                        Rectangle {
+                            anchors.fill: parent
+
+                            anchors.margins: 5
+
+                            radius: 8
+
+                            color: "#081923"
+
+                            border.width: 1
+                            border.color: "#24536a"
+
+                            clip: true
+
+                            Image {
+                                anchors.fill: parent
+
+                                source: modelData
+
+                                fillMode:
+                                Image.PreserveAspectCrop
+
+                                asynchronous: true
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+
+                                enabled:
+                                !scanner.artworkSelectionSaving
+
+                                cursorShape:
+                                Qt.PointingHandCursor
+
+                                onClicked: {
+                                    scanner.selectArtwork(
+                                        root.artworkChooserAppid,
+                                        "hero",
+                                        modelData
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

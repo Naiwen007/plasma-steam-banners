@@ -13,6 +13,15 @@ QtObject {
     property var unavailableLibraries: []
     property string libraryStatusOutput: ""
     property string processOutput: ""
+    property bool artworkOptionsLoading: false
+    property int artworkOptionsAppid: 0
+    property var artworkLogos: []
+    property var artworkHeroes: []
+    property string artworkOptionsOutput: ""
+    property bool artworkSelectionSaving: false
+    property string artworkSelectionOutput: ""
+    property int artworkSelectionAppid: 0
+    property string artworkSelectionType: ""
 
     property string scriptPath: {
         var url = Qt.resolvedUrl(
@@ -88,6 +97,114 @@ QtObject {
         }
     }
 
+    property Process artworkOptionsProcess: Process {
+        onOutputReady: function(output) {
+            scanner.artworkOptionsOutput += output
+        }
+
+        onErrorOccurred: function(error) {
+            scanner.artworkOptionsLoading = false
+            scanner.artworkOptionsAppid = 0
+            scanner.artworkOptionsOutput = ""
+        }
+
+        onFinished: function(exitCode) {
+            var appid = scanner.artworkOptionsAppid
+
+            if (exitCode === 0) {
+                try {
+                    var result = JSON.parse(
+                        scanner.artworkOptionsOutput
+                    )
+
+                    if (result.success === true) {
+                        scanner.artworkLogos =
+                        result.logos || []
+
+                        scanner.artworkHeroes =
+                        result.heroes || []
+
+                        scanner.artworkOptionsFinished(
+                            appid
+                        )
+                    } else {
+                        scanner.artworkOptionsFailed(
+                            result.error || "Unknown error"
+                        )
+                    }
+
+                } catch (error) {
+                    scanner.artworkOptionsFailed(
+                        String(error)
+                    )
+                }
+            } else {
+                scanner.artworkOptionsFailed(
+                    "Artwork lookup failed."
+                )
+            }
+
+            scanner.artworkOptionsOutput = ""
+            scanner.artworkOptionsLoading = false
+            scanner.artworkOptionsAppid = 0
+        }
+    }
+
+    property Process artworkSelectionProcess: Process {
+        onOutputReady: function(output) {
+            scanner.artworkSelectionOutput += output
+        }
+
+        onErrorOccurred: function(error) {
+            scanner.artworkSelectionSaving = false
+            scanner.artworkSelectionOutput = ""
+            scanner.artworkSelectionAppid = 0
+            scanner.artworkSelectionType = ""
+        }
+
+        onFinished: function(exitCode) {
+            var appid =
+            scanner.artworkSelectionAppid
+
+            var artworkType =
+            scanner.artworkSelectionType
+
+            if (exitCode === 0) {
+                try {
+                    var result = JSON.parse(
+                        scanner.artworkSelectionOutput
+                    )
+
+                    if (result.success === true) {
+                        scanner.artworkSelectionFinished(
+                            appid,
+                            artworkType,
+                            result.path
+                        )
+                    } else {
+                        scanner.artworkSelectionFailed(
+                            result.error || "Unknown error"
+                        )
+                    }
+
+                } catch (error) {
+                    scanner.artworkSelectionFailed(
+                        String(error)
+                    )
+                }
+            } else {
+                scanner.artworkSelectionFailed(
+                    "Could not save artwork."
+                )
+            }
+
+            scanner.artworkSelectionOutput = ""
+            scanner.artworkSelectionSaving = false
+            scanner.artworkSelectionAppid = 0
+            scanner.artworkSelectionType = ""
+        }
+    }
+
     property Process libraryStatusProcess: Process {
         onOutputReady: function(output) {
             scanner.libraryStatusOutput += output
@@ -141,6 +258,15 @@ QtObject {
 
     signal scanFinished()
     signal singleGameRefreshFinished(int appid)
+    signal artworkOptionsFinished(int appid)
+    signal artworkOptionsFailed(string error)
+    signal artworkSelectionFinished(
+        int appid,
+        string artworkType,
+        string path
+    )
+
+    signal artworkSelectionFailed(string error)
 
     function loadLibraryStatus() {
         libraryStatusOutput = ""
@@ -152,6 +278,69 @@ QtObject {
                 "import json,pathlib; " +
                 "p=pathlib.Path.home()/'.cache'/'steambanners'/'library_status.json'; " +
                 "print(p.read_text(encoding='utf-8') if p.exists() else '{}',end='')"
+            ]
+        )
+    }
+
+    function loadArtworkOptions(appid) {
+        if (artworkOptionsLoading) {
+            return
+        }
+
+        var id = Number(appid)
+
+        if (!isFinite(id) || id <= 0) {
+            return
+        }
+
+        artworkOptionsOutput = ""
+        artworkLogos = []
+        artworkHeroes = []
+        artworkOptionsAppid = id
+        artworkOptionsLoading = true
+
+        artworkOptionsProcess.start(
+            "python3",
+            [
+                scriptPath,
+                "--list-artwork-appid",
+                String(id)
+            ]
+        )
+    }
+
+    function selectArtwork(
+        appid,
+        artworkType,
+        url
+    ) {
+        if (artworkSelectionSaving) {
+            return
+        }
+
+        var id = Number(appid)
+
+        if (
+            !isFinite(id)
+            || id <= 0
+            || !url
+        ) {
+            return
+        }
+
+        artworkSelectionOutput = ""
+        artworkSelectionAppid = id
+        artworkSelectionType = artworkType
+        artworkSelectionSaving = true
+
+        artworkSelectionProcess.start(
+            "python3",
+            [
+                scriptPath,
+                "--select-artwork",
+                String(id),
+                                      artworkType,
+                                      url
             ]
         )
     }

@@ -21,6 +21,8 @@ GridView {
     property int refreshingAppid: 0
 
     signal refreshArtworkRequested(int appid)
+    signal chooseHeroRequested(int appid)
+    signal chooseLogoRequested(int appid)
 
     property var games: []
     property string favoritesString: ""
@@ -699,6 +701,19 @@ GridView {
                         )
                     }
                 }
+
+                QQC2.MenuItem {
+                    text: i18n("Choose hero artwork")
+
+                    enabled: !grid.scanBusy
+
+                    onTriggered: {
+                        grid.chooseHeroRequested(
+                            modelData.appid
+                        )
+                    }
+                }
+
             }
 
             // ----------------------------------------------------
