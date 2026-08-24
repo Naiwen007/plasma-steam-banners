@@ -7,6 +7,7 @@ QtObject {
     property var games: []
     property bool scanning: false
     property bool refreshingArtwork: false
+    property int refreshingAppid: 0
     property bool steamFound: true
     property var availableLibraries: []
     property var unavailableLibraries: []
@@ -54,6 +55,7 @@ QtObject {
 
             scanner.scanning = false
             scanner.refreshingArtwork = false
+            scanner.refreshingAppid = 0
         }
 
         onFinished: function(exitCode) {
@@ -64,6 +66,7 @@ QtObject {
 
             scanner.scanning = false
             scanner.refreshingArtwork = false
+            scanner.refreshingAppid = 0
 
             scanner.loadLibraryStatus()
         }
@@ -132,6 +135,43 @@ QtObject {
                 "import json,pathlib; " +
                 "p=pathlib.Path.home()/'.cache'/'steambanners'/'library_status.json'; " +
                 "print(p.read_text(encoding='utf-8') if p.exists() else '{}',end='')"
+            ]
+        )
+    }
+
+    function scanGame(appid) {
+        if (scanning) {
+            console.log(
+                "### SCAN ALREADY RUNNING ###"
+            )
+            return
+        }
+
+        var id = Number(appid)
+
+        if (!isFinite(id) || id <= 0) {
+            console.log(
+                "### INVALID APPID:",
+                appid
+            )
+            return
+        }
+
+        console.log(
+            "### REFRESHING SINGLE GAME:",
+            id
+        )
+
+        scanning = true
+        refreshingArtwork = true
+        refreshingAppid = id
+
+        process.start(
+            "python3",
+            [
+                scriptPath,
+                "--refresh-appid",
+                String(id)
             ]
         )
     }

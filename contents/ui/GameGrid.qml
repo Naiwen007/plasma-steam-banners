@@ -14,6 +14,9 @@ GridView {
     property int sortMode: 0
     property string searchText: ""
     property string genreFilter: ""
+    property bool scanBusy: false
+
+    signal refreshArtworkRequested(int appid)
 
     property var games: []
     property string favoritesString: ""
@@ -599,6 +602,20 @@ GridView {
 
                     onTriggered: {
                         grid.toggleFavorite(modelData.appid)
+                    }
+                }
+
+                QQC2.MenuSeparator {}
+
+                QQC2.MenuItem {
+                    text: i18n("Refresh artwork")
+
+                    enabled: !grid.scanBusy
+
+                    onTriggered: {
+                        grid.refreshArtworkRequested(
+                            modelData.appid
+                        )
                     }
                 }
             }

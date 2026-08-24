@@ -1168,6 +1168,12 @@ PlasmoidItem {
 
             games: scanner.games
 
+            scanBusy: scanner.scanning
+
+            onRefreshArtworkRequested: function(appid) {
+                scanner.scanGame(appid)
+            }
+
             searchText:
             searchField.text
 

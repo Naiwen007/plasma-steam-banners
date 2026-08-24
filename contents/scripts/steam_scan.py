@@ -49,6 +49,15 @@ def parse_args():
         )
     )
 
+    parser.add_argument(
+        "--refresh-appid",
+        type=int,
+        default=None,
+        help=(
+            "Refresh metadata and artwork for one Steam app ID."
+        )
+    )
+
     return parser.parse_args()
 
 
@@ -1381,6 +1390,13 @@ def main():
             file=sys.stderr
         )
 
+    elif args.refresh_appid is not None:
+        print(
+            f"### SINGLE GAME REFRESH: "
+            f"{args.refresh_appid} ###",
+            file=sys.stderr
+        )
+
     else:
         print(
             "### FAST LOCAL SCAN ###",
@@ -1401,7 +1417,15 @@ def main():
             file=sys.stderr
         )
 
-        if args.refresh_artwork:
+        refresh_this_game = (
+            args.refresh_appid is not None
+            and game.get("appid") == args.refresh_appid
+        )
+
+        if (
+            args.refresh_artwork
+            or refresh_this_game
+        ):
             refresh_metadata(
                 game,
                 metadata_cache
@@ -1422,7 +1446,10 @@ def main():
                 game
             )
 
-    if args.refresh_artwork:
+    if (
+        args.refresh_artwork
+        or args.refresh_appid is not None
+    ):
         save_metadata_cache(
             metadata_cache
         )
