@@ -22,6 +22,32 @@ Kirigami.FormLayout {
     property bool updateInstalling: false
     property string installOutput: ""
     property bool updateInstalled: false
+    property bool cacheLoading: false
+    property string cacheOutput: ""
+    property int cacheArtworkSize: 0
+    property int cacheArtworkFiles: 0
+    property int cacheLogoFiles: 0
+    property int cacheHeroFiles: 0
+    property int cacheMetadataSize: 0
+    property int cacheTotalSize: 0
+    property bool cacheActionRunning: false
+    property string cacheActionOutput: ""
+    property string cacheAction: ""
+
+    property bool confirmClearArtwork: false
+    property bool confirmClearMetadata: false
+
+    property string cacheScriptPath: {
+        var url = Qt.resolvedUrl(
+            "../scripts/cache_manage.py"
+        ).toString()
+
+        if (url.startsWith("file://")) {
+            url = url.substring(7)
+        }
+
+        return decodeURIComponent(url)
+    }
 
     property string updateScriptPath: {
         var url = Qt.resolvedUrl(
@@ -242,6 +268,150 @@ Kirigami.FormLayout {
         }
     }
 
+    Process {
+        id: cacheStatusProcess
+
+        onOutputReady: function(output) {
+            root.cacheOutput += output
+        }
+
+        onErrorOccurred: function(error) {
+            console.log(
+                "### CACHE STATUS ERROR:",
+                error
+            )
+
+            root.cacheLoading = false
+            cacheStatus.text =
+            i18n("Could not read cache information.")
+        }
+
+        onFinished: function(exitCode) {
+            root.cacheLoading = false
+
+            try {
+                var result = JSON.parse(
+                    root.cacheOutput
+                )
+
+                if (!result.success) {
+                    cacheStatus.text =
+                    result.error
+                    || i18n(
+                        "Could not read cache information."
+                    )
+                    return
+                }
+
+                root.cacheArtworkSize =
+                result.artwork.size || 0
+
+                root.cacheArtworkFiles =
+                result.artwork.files || 0
+
+                root.cacheLogoFiles =
+                result.artwork.logos.files || 0
+
+                root.cacheHeroFiles =
+                result.artwork.heroes.files || 0
+
+                root.cacheMetadataSize =
+                result.metadata.size || 0
+
+                root.cacheTotalSize =
+                result.total_size || 0
+
+                cacheStatus.text = ""
+            } catch (error) {
+                console.log(
+                    "### CACHE STATUS JSON ERROR:",
+                    error
+                )
+
+                cacheStatus.text =
+                i18n("Could not read cache information.")
+            }
+        }
+    }
+
+    Process {
+        id: cacheActionProcess
+
+        onOutputReady: function(output) {
+            root.cacheActionOutput += output
+        }
+
+        onErrorOccurred: function(error) {
+            console.log(
+                "### CACHE ACTION ERROR:",
+                error
+            )
+
+            root.cacheActionRunning = false
+            root.confirmClearArtwork = false
+            root.confirmClearMetadata = false
+
+            cacheStatus.text =
+            i18n("Could not clear cache.")
+        }
+
+        onFinished: function(exitCode) {
+            root.cacheActionRunning = false
+            root.confirmClearArtwork = false
+            root.confirmClearMetadata = false
+
+            try {
+                var result = JSON.parse(
+                    root.cacheActionOutput
+                )
+
+                if (!result.success) {
+                    cacheStatus.text =
+                    result.error
+                    || i18n("Could not clear cache.")
+                    return
+                }
+
+                if (result.cleared === "artwork") {
+                    cacheStatus.text =
+                    i18n(
+                        "Artwork cache cleared."
+                    )
+                } else if (
+                    result.cleared === "metadata"
+                ) {
+                    cacheStatus.text =
+                    i18n(
+                        "Metadata cache cleared."
+                    )
+                }
+
+                root.loadCacheStatus()
+
+            } catch (error) {
+                console.log(
+                    "### CACHE ACTION JSON ERROR:",
+                    error
+                )
+
+                cacheStatus.text =
+                i18n("Could not clear cache.")
+            }
+        }
+    }
+
+    Timer {
+        id: cacheConfirmTimer
+
+        interval: 5000
+        repeat: false
+
+        onTriggered: {
+            root.confirmClearArtwork = false
+            root.confirmClearMetadata = false
+        }
+    }
+
     QQC2.SpinBox {
         id: columnsSpinBox
 
@@ -289,7 +459,7 @@ Kirigami.FormLayout {
     Column {
         Kirigami.FormData.isSection: true
 
-        spacing: Kirigami.Units.smallSpacing
+        spacing: 2
 
         QQC2.Label {
             width: 420
@@ -394,6 +564,143 @@ Kirigami.FormLayout {
 
         text: ""
         opacity: 0.75
+    }
+
+    Kirigami.Separator {
+        Kirigami.FormData.isSection: true
+        Kirigami.FormData.label:
+            i18n("Cache")
+    }
+
+    Column {
+        Kirigami.FormData.isSection: true
+
+        spacing: 2
+
+        QQC2.Label {
+            text: i18n(
+                "Artwork: %1 (%2 files)",
+                       root.formatBytes(
+                           root.cacheArtworkSize
+                       ),
+                       root.cacheArtworkFiles
+            )
+        }
+
+        QQC2.Label {
+            text: i18n(
+                "Logos: %1   Heroes: %2",
+                root.cacheLogoFiles,
+                root.cacheHeroFiles
+            )
+
+            opacity: 0.75
+        }
+
+        QQC2.Label {
+            text: i18n(
+                "Metadata: %1",
+                root.formatBytes(
+                    root.cacheMetadataSize
+                )
+            )
+        }
+
+        QQC2.Label {
+            text: i18n(
+                "Total cache size: %1",
+                root.formatBytes(
+                    root.cacheTotalSize
+                )
+            )
+
+            font.bold: true
+        }
+
+        QQC2.Button {
+            text: root.cacheLoading
+            ? i18n("Refreshing...")
+            : i18n("Refresh cache information")
+
+            enabled: !root.cacheLoading
+
+            onClicked: {
+                root.loadCacheStatus()
+            }
+        }
+
+        Row {
+            spacing: Kirigami.Units.smallSpacing
+
+            QQC2.Button {
+                text: root.confirmClearArtwork
+                ? i18n("Confirm clear artwork")
+                : i18n("Clear artwork cache")
+
+                enabled:
+                !root.cacheActionRunning
+                && root.cacheArtworkFiles > 0
+
+                onClicked: {
+                    if (!root.confirmClearArtwork) {
+                        root.confirmClearArtwork = true
+                        root.confirmClearMetadata = false
+
+                        cacheStatus.text =
+                        i18n(
+                            "Click again to clear all cached artwork."
+                        )
+
+                        cacheConfirmTimer.restart()
+                        return
+                    }
+
+                    cacheConfirmTimer.stop()
+
+                    root.runCacheAction(
+                        "clear-artwork"
+                    )
+                }
+            }
+
+            QQC2.Button {
+                text: root.confirmClearMetadata
+                ? i18n("Confirm clear metadata")
+                : i18n("Clear metadata cache")
+
+                enabled:
+                !root.cacheActionRunning
+                && root.cacheMetadataSize > 0
+
+                onClicked: {
+                    if (!root.confirmClearMetadata) {
+                        root.confirmClearMetadata = true
+                        root.confirmClearArtwork = false
+
+                        cacheStatus.text =
+                        i18n(
+                            "Click again to clear cached game metadata."
+                        )
+
+                        cacheConfirmTimer.restart()
+                        return
+                    }
+
+                    cacheConfirmTimer.stop()
+
+                    root.runCacheAction(
+                        "clear-metadata"
+                    )
+                }
+            }
+        }
+
+        QQC2.Label {
+            id: cacheStatus
+
+            text: ""
+            opacity: 0.75
+        }
     }
 
     Kirigami.Separator {
@@ -533,7 +840,54 @@ Kirigami.FormLayout {
         }
     }
 
+    function formatBytes(bytes) {
+        if (bytes < 1024) {
+            return bytes + " B"
+        }
+
+        if (bytes < 1024 * 1024) {
+            return (
+                bytes / 1024
+            ).toFixed(1) + " KiB"
+        }
+
+        return (
+            bytes / (1024 * 1024)
+        ).toFixed(1) + " MiB"
+    }
+
+    function loadCacheStatus() {
+        root.cacheLoading = true
+        root.cacheOutput = ""
+
+        cacheStatusProcess.start(
+            "python3",
+            [
+                root.cacheScriptPath,
+                "status"
+            ]
+        )
+    }
+
+    function runCacheAction(action) {
+        root.cacheActionRunning = true
+        root.cacheActionOutput = ""
+        root.cacheAction = action
+
+        cacheStatus.text =
+        i18n("Clearing cache...")
+
+        cacheActionProcess.start(
+            "python3",
+            [
+                root.cacheScriptPath,
+                action
+            ]
+        )
+    }
+
     Component.onCompleted: {
+        root.loadCacheStatus()
         keyLoader.start(
             "python3",
             [
