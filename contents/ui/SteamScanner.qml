@@ -30,14 +30,21 @@ QtObject {
             console.log("### PROCESS OUTPUT ###")
 
             try {
-                scanner.games = JSON.parse(output)
+                var result = JSON.parse(output)
 
                 console.log(
                     "### GAMES PARSED:",
-                    scanner.games.length
+                    result.length
                 )
 
-                scanner.scanFinished()
+                if (scanner.refreshingAppid > 0) {
+                    scanner.singleGameRefreshFinished(
+                        scanner.refreshingAppid
+                    )
+                } else {
+                    scanner.games = result
+                    scanner.scanFinished()
+                }
 
             } catch (e) {
                 console.log(
@@ -124,6 +131,7 @@ QtObject {
     }
 
     signal scanFinished()
+    signal singleGameRefreshFinished(int appid)
 
     function loadLibraryStatus() {
         libraryStatusOutput = ""

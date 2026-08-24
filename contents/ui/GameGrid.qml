@@ -11,6 +11,9 @@ GridView {
     property int columns: 2
     property int cardHeight: 120
     property int artworkRevision: 0
+    property int singleArtworkRevision: 0
+    property int refreshedAppid: 0
+    property var artworkRevisionByAppid: ({})
     property int sortMode: 0
     property string searchText: ""
     property string genreFilter: ""
@@ -27,6 +30,28 @@ GridView {
     cellHeight: cardHeight + 10
 
     model: sortedGames
+
+    function artworkVersion(appid) {
+        var key = String(appid)
+        var gameRevision =
+        artworkRevisionByAppid[key] || 0
+
+        return artworkRevision + "-" + gameRevision
+    }
+
+    function refreshSingleArtwork(appid) {
+        var key = String(appid)
+        var revisions = Object.assign(
+            {},
+            artworkRevisionByAppid
+        )
+
+        singleArtworkRevision += 1
+        refreshedAppid = Number(appid)
+
+        revisions[key] = singleArtworkRevision
+        artworkRevisionByAppid = revisions
+    }
 
     function favoriteIds() {
         if (!favoritesString || favoritesString === "") {
@@ -356,8 +381,9 @@ GridView {
                     anchors.fill: parent
 
                     source: heroContainer.visible
-                    ? "file://" + modelData.hero + "?v=" + grid.artworkRevision
-                    : ""
+                    ? "file://" + modelData.hero
+                        + "?v=" + grid.artworkVersion(modelData.appid)
+                        : ""
 
                     fillMode: Image.PreserveAspectCrop
 
@@ -450,7 +476,8 @@ GridView {
                          && modelData.logo !== ""
 
                 source: visible
-                    ? "file://" + modelData.logo + "?v=" + grid.artworkRevision
+                ? "file://" + modelData.logo
+                    + "?v=" + grid.artworkVersion(modelData.appid)
                     : ""
 
                 fillMode: Image.PreserveAspectFit

@@ -88,6 +88,16 @@ PlasmoidItem {
 
             gameGrid.artworkRevision += 1
         }
+
+        onSingleGameRefreshFinished: function(appid) {
+            console.log(
+                "### SINGLE GAME REFRESH FINISHED:",
+                appid
+            )
+
+            gameGrid.refreshSingleArtwork(appid)
+        }
+
     }
 
     Connections {
