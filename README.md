@@ -22,6 +22,7 @@ Steam Banners scans your local Steam libraries, displays your installed games as
 - Configurable card height
 - Manual refresh button
 - Per-game artwork refresh from the game context menu
+- Per-game SteamGridDB hero and logo artwork selection
 - Built-in update checker and automatic update installation
 - Cache management directly from the widget settings
 - Automatic warning when a configured Steam library is unavailable
@@ -130,8 +131,6 @@ Steam Banners should then appear in the Plasma widget browser.
 
 ## Updating
 
-## Updating
-
 Steam Banners includes a built-in update checker in the widget settings.
 
 When a newer GitHub release is available, the settings page can:
@@ -198,6 +197,10 @@ Use the refresh button in the Steam Banners header to rescan your Steam librarie
 Normal widget startup uses locally cached metadata and artwork for faster loading. A manual refresh performs the slower network lookups needed to update genres and SteamGridDB artwork.
 
 To refresh artwork for a single game, right-click the game card and select `Refresh artwork`.
+
+To choose artwork manually, right-click a game card and select `Choose hero artwork` or `Choose logo artwork`.
+
+Steam Banners fetches the available SteamGridDB artwork for that game and displays it in an artwork chooser. Selecting an image updates only that game's cached artwork.
 
 The tooltip changes to `Refreshing...` while a scan is running.
 
