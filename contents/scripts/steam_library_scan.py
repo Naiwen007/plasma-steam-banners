@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import json
-import os
 import re
 from pathlib import Path
 
@@ -210,23 +209,12 @@ def main():
 
     games = scan_games(libraries)
 
-    data_dir = Path.home() / ".cache/com.new.steambanners"
-
-    data_dir.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-    cache_file = data_dir / "games.json"
-
-    with open(cache_file, "w", encoding="utf-8") as f:
-        json.dump(
+    print(
+        json.dumps(
             games,
-            f,
-            indent=4,
             ensure_ascii=False
-            )
-    print(json.dumps(games, ensure_ascii=False))
+        )
+    )
 
 if __name__ == "__main__":
     main()
