@@ -12,6 +12,25 @@ Kirigami.FormLayout {
 
     property bool apiKeyVisible: false
     property bool apiKeyLoaded: false
+    property bool updateChecking: false
+    property string updateOutput: ""
+    property string installedVersion: ""
+    property string latestVersion: ""
+    property bool updateAvailable: false
+    property string updateReleaseUrl: ""
+    property string updateAssetUrl: ""
+
+    property string updateScriptPath: {
+        var url = Qt.resolvedUrl(
+            "../scripts/update_check.py"
+        ).toString()
+
+        if (url.startsWith("file://")) {
+            url = url.substring(7)
+        }
+
+        return decodeURIComponent(url)
+    }
 
     Process {
         id: keyLoader
@@ -50,6 +69,83 @@ Kirigami.FormLayout {
                 saveStatus.text = i18n("API key saved.")
             } else {
                 saveStatus.text = i18n("Could not save API key.")
+            }
+        }
+    }
+
+    Process {
+        id: updateChecker
+
+        onOutputReady: function(output) {
+            root.updateOutput += output
+        }
+
+        onErrorOccurred: function(error) {
+            console.log(
+                "### UPDATE CHECK ERROR:",
+                error
+            )
+
+            root.updateChecking = false
+            updateStatus.text =
+            i18n("Could not check for updates.")
+        }
+
+        onFinished: function(exitCode) {
+            console.log(
+                "### UPDATE CHECK FINISHED:",
+                exitCode
+            )
+
+            root.updateChecking = false
+
+            try {
+                var result = JSON.parse(
+                    root.updateOutput
+                )
+
+                if (!result.success) {
+                    updateStatus.text =
+                    i18n("Could not check for updates.")
+                    return
+                }
+
+                root.installedVersion =
+                result.installed || ""
+
+                root.latestVersion =
+                result.latest || ""
+
+                root.updateAvailable =
+                result.update_available === true
+
+                root.updateReleaseUrl =
+                result.release_url || ""
+
+                root.updateAssetUrl =
+                result.asset_url || ""
+
+                if (root.updateAvailable) {
+                    updateStatus.text =
+                    i18n(
+                        "Version %1 is available.",
+                         root.latestVersion
+                    )
+                } else {
+                    updateStatus.text =
+                    i18n(
+                        "Steam Banners is up to date."
+                    )
+                }
+
+            } catch (error) {
+                console.log(
+                    "### UPDATE JSON ERROR:",
+                    error
+                )
+
+                updateStatus.text =
+                i18n("Could not check for updates.")
             }
         }
     }
@@ -206,6 +302,91 @@ Kirigami.FormLayout {
 
         text: ""
         opacity: 0.75
+    }
+
+    Kirigami.Separator {
+        Kirigami.FormData.isSection: true
+        Kirigami.FormData.label:
+        i18n("Steam Banners")
+    }
+
+    Column {
+        Kirigami.FormData.isSection: true
+
+        spacing: Kirigami.Units.smallSpacing
+
+        QQC2.Label {
+            text: root.installedVersion !== ""
+            ? i18n(
+                "Installed version: %1",
+                root.installedVersion
+            )
+            : i18n(
+                "Check for updates to see version information."
+            )
+
+            opacity: 0.85
+        }
+
+        QQC2.Label {
+            visible: root.latestVersion !== ""
+
+            text: i18n(
+                "Latest version: %1",
+                root.latestVersion
+            )
+
+            opacity: 0.85
+        }
+
+        Row {
+            spacing: Kirigami.Units.smallSpacing
+
+            QQC2.Button {
+                text: root.updateChecking
+                ? i18n("Checking...")
+                : i18n("Check for updates")
+
+                enabled: !root.updateChecking
+
+                onClicked: {
+                    root.updateChecking = true
+                    root.updateOutput = ""
+                    root.updateAvailable = false
+
+                    updateStatus.text =
+                    i18n("Checking for updates...")
+
+                    updateChecker.start(
+                        "python3",
+                        [
+                            root.updateScriptPath
+                        ]
+                    )
+                }
+            }
+
+            QQC2.Button {
+                visible:
+                root.updateAvailable
+                && root.updateReleaseUrl !== ""
+
+                text: i18n("View release")
+
+                onClicked: {
+                    Qt.openUrlExternally(
+                        root.updateReleaseUrl
+                    )
+                }
+            }
+        }
+
+        QQC2.Label {
+            id: updateStatus
+
+            text: ""
+            opacity: 0.75
+        }
     }
 
     Component.onCompleted: {
