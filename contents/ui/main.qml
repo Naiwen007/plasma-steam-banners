@@ -13,6 +13,12 @@ PlasmoidItem {
     property bool apiKeyAvailable: true
     property int apiNoticeHeight: apiKeyAvailable ? 0 : 64
 
+    property bool libraryWarningVisible:
+        scanner.unavailableLibraries.length > 0
+
+    property int libraryWarningHeight:
+        libraryWarningVisible ? 72 : 0
+
     property bool searchOpen: false
 
     property bool noGamesFound:
@@ -926,6 +932,75 @@ PlasmoidItem {
         }
     }
 
+    Rectangle {
+        id: libraryWarning
+
+        anchors.top:
+        root.apiKeyAvailable
+        ? headerArea.bottom
+        : apiNotice.bottom
+
+        anchors.left: parent.left
+        anchors.right: parent.right
+
+        anchors.topMargin:
+        root.libraryWarningVisible ? 8 : 0
+
+        anchors.leftMargin: 10
+        anchors.rightMargin: 10
+
+        height: root.libraryWarningHeight
+
+        visible: root.libraryWarningVisible
+
+        radius: 8
+
+        color: "#302511"
+        border.color: "#d5a72b"
+        border.width: 1
+
+        Row {
+            anchors.fill: parent
+
+            anchors.leftMargin: 14
+            anchors.rightMargin: 14
+
+            spacing: 12
+
+            Text {
+                anchors.verticalCenter:
+                parent.verticalCenter
+
+                text: "⚠"
+
+                color: "#ffd34e"
+                font.pixelSize: 24
+                font.bold: true
+            }
+
+            QQC2.Label {
+                anchors.verticalCenter:
+                parent.verticalCenter
+
+                width:
+                parent.width - 50
+
+                text:
+                scanner.unavailableLibraries.length === 1
+                ? i18n(
+                    "A Steam library is unavailable: %1",
+                    scanner.unavailableLibraries[0]
+                )
+                : i18n(
+                    "%1 Steam libraries are unavailable.",
+                    scanner.unavailableLibraries.length
+                )
+
+                wrapMode: Text.WordWrap
+            }
+        }
+    }
+
     // ============================================================
     // COLLAPSIBLE SEARCH PANEL
     // ============================================================
@@ -934,7 +1009,9 @@ PlasmoidItem {
         id: searchPanel
 
         anchors.top:
-        root.apiKeyAvailable
+        root.libraryWarningVisible
+        ? libraryWarning.bottom
+        : root.apiKeyAvailable
         ? headerArea.bottom
         : apiNotice.bottom
 

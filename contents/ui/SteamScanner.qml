@@ -7,6 +7,10 @@ QtObject {
     property var games: []
     property bool scanning: false
     property bool refreshingArtwork: false
+    property bool steamFound: true
+    property var availableLibraries: []
+    property var unavailableLibraries: []
+    property string libraryStatusOutput: ""
 
     property string scriptPath: {
         var url = Qt.resolvedUrl(
@@ -60,10 +64,77 @@ QtObject {
 
             scanner.scanning = false
             scanner.refreshingArtwork = false
+
+            scanner.loadLibraryStatus()
+        }
+    }
+
+    property Process libraryStatusProcess: Process {
+        onOutputReady: function(output) {
+            scanner.libraryStatusOutput += output
+        }
+
+        onErrorOccurred: function(error) {
+            console.log(
+                "### LIBRARY STATUS ERROR:",
+                error
+            )
+        }
+
+        onFinished: function(exitCode) {
+            console.log(
+                "### LIBRARY STATUS FINISHED:",
+                exitCode
+            )
+
+            try {
+                var status = JSON.parse(
+                    scanner.libraryStatusOutput
+                )
+
+                scanner.steamFound =
+                status.steam_found === true
+
+                scanner.availableLibraries =
+                status.available_libraries || []
+
+                scanner.unavailableLibraries =
+                status.unavailable_libraries || []
+
+                console.log(
+                    "### AVAILABLE LIBRARIES:",
+                    scanner.availableLibraries.length
+                )
+
+                console.log(
+                    "### UNAVAILABLE LIBRARIES:",
+                    scanner.unavailableLibraries.length
+                )
+
+            } catch (error) {
+                console.log(
+                    "### LIBRARY STATUS JSON ERROR:",
+                    error
+                )
+            }
         }
     }
 
     signal scanFinished()
+
+    function loadLibraryStatus() {
+        libraryStatusOutput = ""
+
+        libraryStatusProcess.start(
+            "python3",
+            [
+                "-c",
+                "import json,pathlib; " +
+                "p=pathlib.Path.home()/'.cache'/'steambanners'/'library_status.json'; " +
+                "print(p.read_text(encoding='utf-8') if p.exists() else '{}',end='')"
+            ]
+        )
+    }
 
     function scan(refreshArtwork) {
         if (scanning) {

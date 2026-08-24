@@ -53,29 +53,88 @@ def parse_simple_vdf(filename):
 
 def find_libraries(steam_root):
     """
-    Returns every Steam library path.
+    Returns available and unavailable Steam library paths.
     """
 
     libraries = []
+    unavailable_libraries = []
 
     vdf = steam_root / "steamapps/libraryfolders.vdf"
 
     with open(vdf, encoding="utf-8", errors="ignore") as f:
 
-        current_path = None
-
         for line in f:
 
-            m = re.search(r'"path"\s+"([^"]+)"', line)
+            match = re.search(
+                r'"path"\s+"([^"]+)"',
+                line
+            )
 
-            if m:
-                current_path = Path(m.group(1))
+            if not match:
+                continue
 
-                if current_path.exists():
-                    libraries.append(current_path)
+            library = Path(
+                match.group(1)
+            )
 
-    return libraries
+            if library.exists():
+                if library not in libraries:
+                    libraries.append(library)
+            else:
+                if library not in unavailable_libraries:
+                    unavailable_libraries.append(
+                        library
+                    )
 
+    return libraries, unavailable_libraries
+
+def write_library_status(
+    steam_root,
+    libraries,
+    unavailable_libraries
+):
+    cache_dir = (
+        Path.home()
+        / ".cache"
+        / "steambanners"
+    )
+
+    cache_dir.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    status_file = (
+        cache_dir
+        / "library_status.json"
+    )
+
+    data = {
+        "steam_found": steam_root is not None,
+        "steam_root": (
+            str(steam_root)
+            if steam_root is not None
+            else ""
+        ),
+        "available_libraries": [
+            str(path)
+            for path in libraries
+        ],
+        "unavailable_libraries": [
+            str(path)
+            for path in unavailable_libraries
+        ],
+    }
+
+    status_file.write_text(
+        json.dumps(
+            data,
+            indent=4,
+            ensure_ascii=False
+        )
+        + "\n",
+        encoding="utf-8"
+    )
 
 def scan_games(libraries):
 
@@ -130,9 +189,24 @@ def main():
     steam = find_steam_root()
 
     if steam is None:
+        write_library_status(
+            None,
+            [],
+            []
+        )
+
+        print("[]")
         return
 
-    libraries = find_libraries(steam)
+    libraries, unavailable_libraries = (
+        find_libraries(steam)
+    )
+
+    write_library_status(
+        steam,
+        libraries,
+        unavailable_libraries
+    )
 
     games = scan_games(libraries)
 
