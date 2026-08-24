@@ -12,6 +12,7 @@ QtObject {
     property var availableLibraries: []
     property var unavailableLibraries: []
     property string libraryStatusOutput: ""
+    property string processOutput: ""
 
     property string scriptPath: {
         var url = Qt.resolvedUrl(
@@ -27,31 +28,7 @@ QtObject {
 
     property Process process: Process {
         onOutputReady: function(output) {
-            console.log("### PROCESS OUTPUT ###")
-
-            try {
-                var result = JSON.parse(output)
-
-                console.log(
-                    "### GAMES PARSED:",
-                    result.length
-                )
-
-                if (scanner.refreshingAppid > 0) {
-                    scanner.singleGameRefreshFinished(
-                        scanner.refreshingAppid
-                    )
-                } else {
-                    scanner.games = result
-                    scanner.scanFinished()
-                }
-
-            } catch (e) {
-                console.log(
-                    "### JSON ERROR:",
-                    e
-                )
-            }
+            scanner.processOutput += output
         }
 
         onErrorOccurred: function(error) {
@@ -71,6 +48,38 @@ QtObject {
                 exitCode
             )
 
+            var refreshedAppid =
+            scanner.refreshingAppid
+
+            if (exitCode === 0) {
+                try {
+                    var result = JSON.parse(
+                        scanner.processOutput
+                    )
+
+                    console.log(
+                        "### GAMES PARSED:",
+                        result.length
+                    )
+
+                    if (refreshedAppid > 0) {
+                        scanner.singleGameRefreshFinished(
+                            refreshedAppid
+                        )
+                    } else {
+                        scanner.games = result
+                        scanner.scanFinished()
+                    }
+
+                } catch (error) {
+                    console.log(
+                        "### JSON ERROR:",
+                        error
+                    )
+                }
+            }
+
+            scanner.processOutput = ""
             scanner.scanning = false
             scanner.refreshingArtwork = false
             scanner.refreshingAppid = 0
@@ -170,6 +179,7 @@ QtObject {
             id
         )
 
+        processOutput = ""
         scanning = true
         refreshingArtwork = true
         refreshingAppid = id
@@ -206,6 +216,7 @@ QtObject {
             scriptPath
         )
 
+        processOutput = ""
         scanning = true
         refreshingArtwork = doRefresh
 
