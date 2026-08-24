@@ -54,7 +54,7 @@ def parse_args():
         type=int,
         default=None,
         help=(
-            "Refresh metadata and artwork for one Steam app ID."
+            "Refresh artwork for one Steam app ID."
         )
     )
 
@@ -1646,11 +1646,19 @@ def main():
             and game.get("appid") == args.refresh_appid
         )
 
-        if (
-            args.refresh_artwork
-            or refresh_this_game
-        ):
+        if args.refresh_artwork:
             refresh_metadata(
+                game,
+                metadata_cache
+            )
+
+            refresh_artwork(
+                game,
+                api_key
+            )
+
+        elif refresh_this_game:
+            apply_cached_metadata(
                 game,
                 metadata_cache
             )
@@ -1670,10 +1678,7 @@ def main():
                 game
             )
 
-    if (
-        args.refresh_artwork
-        or args.refresh_appid is not None
-    ):
+    if args.refresh_artwork:
         save_metadata_cache(
             metadata_cache
         )
