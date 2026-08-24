@@ -90,6 +90,14 @@ PlasmoidItem {
         }
     }
 
+    Connections {
+        target: plasmoid.configuration
+
+        function onCacheRevisionChanged() {
+            scanner.scan(false)
+        }
+    }
+
     // ============================================================
     // BACKGROUND
     // ============================================================

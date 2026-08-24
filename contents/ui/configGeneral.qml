@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls as QQC2
 import org.kde.kirigami as Kirigami
+import org.kde.plasma.plasmoid
 import SteamBanners.Process
 
 Kirigami.FormLayout {
@@ -387,6 +388,9 @@ Kirigami.FormLayout {
                 }
 
                 root.loadCacheStatus()
+
+                plasmoid.configuration.cacheRevision =
+                    plasmoid.configuration.cacheRevision + 1
 
             } catch (error) {
                 console.log(
