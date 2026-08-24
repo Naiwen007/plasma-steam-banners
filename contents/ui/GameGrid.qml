@@ -18,6 +18,7 @@ GridView {
     property string searchText: ""
     property string genreFilter: ""
     property bool scanBusy: false
+    property int refreshingAppid: 0
 
     signal refreshArtworkRequested(int appid)
 
@@ -611,6 +612,59 @@ GridView {
                 Behavior on opacity {
                     NumberAnimation {
                         duration: 140
+                    }
+                }
+            }
+
+            // ----------------------------------------------------
+            // SINGLE GAME REFRESH INDICATOR
+            // ----------------------------------------------------
+
+            Rectangle {
+                z: 6
+
+                anchors.left: parent.left
+                anchors.bottom: parent.bottom
+
+                anchors.leftMargin: 9
+                anchors.bottomMargin: 8
+
+                height: 28
+                width: refreshRow.implicitWidth + 18
+
+                radius: 7
+
+                visible:
+                grid.refreshingAppid > 0
+                && Number(modelData.appid) === grid.refreshingAppid
+
+                color: "#d9081219"
+
+                border.width: 1
+                border.color: "#45b9ee"
+
+                Row {
+                    id: refreshRow
+
+                    anchors.centerIn: parent
+
+                    spacing: 6
+
+                    QQC2.BusyIndicator {
+                        width: 16
+                        height: 16
+
+                        running: parent.parent.visible
+                    }
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        text: i18n("Refreshing...")
+                        color: "#f2f6f9"
+
+                        font.pixelSize: 11
+                        font.bold: true
                     }
                 }
             }

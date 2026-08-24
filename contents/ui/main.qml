@@ -361,6 +361,10 @@ PlasmoidItem {
             QQC2.ToolButton {
                 id: refreshButton
 
+                property bool fullRefreshActive:
+                    scanner.refreshingArtwork
+                    && scanner.refreshingAppid === 0
+
                 width: 40
                 height: 40
 
@@ -381,7 +385,7 @@ PlasmoidItem {
                     transformOrigin: Item.Center
 
                     RotationAnimation on rotation {
-                        running: scanner.scanning
+                        running: refreshButton.fullRefreshActive
                         loops: Animation.Infinite
                         from: 0
                         to: 360
@@ -389,7 +393,7 @@ PlasmoidItem {
                     }
 
                     onRotationChanged: {
-                        if (!scanner.scanning) {
+                        if (!refreshButton.fullRefreshActive) {
                             rotation = 0
                         }
                     }
@@ -412,12 +416,12 @@ PlasmoidItem {
 
                     border.width:
                     refreshButton.hovered
-                    || scanner.scanning
+                    || refreshButton.fullRefreshActive
                     ? 2
                     : 1
 
                     border.color:
-                    scanner.scanning
+                    refreshButton.fullRefreshActive
                     ? "#35d9ff"
                     : refreshButton.hovered
                     ? "#25d7ff"
@@ -439,7 +443,7 @@ PlasmoidItem {
                 QQC2.ToolTip.visible: hovered
 
                 QQC2.ToolTip.text:
-                scanner.scanning
+                refreshButton.fullRefreshActive
                 ? i18n("Refreshing...")
                 : i18n("Refresh artwork")
             }
@@ -1179,6 +1183,7 @@ PlasmoidItem {
             games: scanner.games
 
             scanBusy: scanner.scanning
+            refreshingAppid: scanner.refreshingAppid
 
             onRefreshArtworkRequested: function(appid) {
                 scanner.scanGame(appid)
