@@ -21,7 +21,11 @@ Steam Banners scans your local Steam libraries, displays your installed games as
 - Configurable number of columns
 - Configurable card height
 - Manual refresh button
-- Local metadata caching for faster startup
+- Per-game artwork refresh from the game context menu
+- Built-in update checker and automatic update installation
+- Cache management directly from the widget settings
+- Automatic warning when a configured Steam library is unavailable
+- Local artwork and metadata caching for faster startup
 - First-run guidance when no SteamGridDB API key is configured
 - Empty-state messages when no games or favorites are found
 - Custom Steam Banners interface
@@ -126,16 +130,38 @@ Steam Banners should then appear in the Plasma widget browser.
 
 ## Updating
 
-From inside the cloned repository:
+## Updating
 
-```bash
+Steam Banners includes a built-in update checker in the widget settings.
+
+When a newer GitHub release is available, the settings page can:
+
+- show the installed and latest available versions,
+- open the corresponding GitHub release,
+- download and install the release automatically,
+- and restart Plasma after installation.
+
+Automatic installation downloads the official Steam Banners source release archive, builds it locally, and installs it under:
+
+```text
+~/.local
+```
+Because updates are built locally, the build requirements listed above must also be installed for automatic updates to work.
+
+Automatic updating is intentionally disabled when Steam Banners is running directly from a development Git checkout.
+
+Updating a development checkout
+
+When working from a cloned repository, update it manually:
+
 git pull
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 cmake --install build --prefix "$HOME/.local"
-```
 
-Restart Plasma Shell after updating.
+Restart Plasma Shell after updating:
+
+nohup plasmashell --replace > /tmp/plasmashell.log 2>&1 &
 
 ## Usage
 
@@ -167,11 +193,13 @@ Selecting a genre shows only games that match that genre. Selecting the same gen
 
 ### Refresh
 
-Use the refresh button in the Steam Banners header to rescan your Steam libraries, refresh game metadata, and update artwork.
+Use the refresh button in the Steam Banners header to rescan your Steam libraries, refresh game metadata, and update artwork for all installed games.
 
 Normal widget startup uses locally cached metadata and artwork for faster loading. A manual refresh performs the slower network lookups needed to update genres and SteamGridDB artwork.
 
-The tooltip changes to `Refreshing...` while the scan is running.
+To refresh artwork for a single game, right-click the game card and select `Refresh artwork`.
+
+The tooltip changes to `Refreshing...` while a scan is running.
 
 ### Settings
 
@@ -184,10 +212,20 @@ The widget settings currently include:
   - Favorites first
   - Favorites only
 - SteamGridDB API key
+- Cache information
+  - Artwork size and file count
+  - Logo and hero file counts
+  - Metadata size
+  - Clear artwork cache
+  - Clear metadata cache
+- Update management
+  - Check for new Steam Banners releases
+  - Install available updates
+  - Restart Plasma after an update
 
 ## Artwork and metadata cache
 
-Steam Banners stores downloaded artwork and game metadata in a local runtime cache.
+Steam Banners stores downloaded artwork, game metadata, and Steam library status information in a local runtime cache.
 
 The cache is located at:
 
@@ -200,9 +238,16 @@ It currently contains:
 logos/
 heroes/
 game_metadata.json
+library_status.json
 ```
 
 Cached artwork and metadata are reused during normal startup to keep the widget responsive.
+
+The widget settings display the current artwork and metadata cache usage. Artwork and metadata can also be cleared separately from the settings.
+
+Clearing the artwork cache removes downloaded and locally prepared logos and hero images. The widget automatically rescans the library afterward.
+
+Clearing the metadata cache removes cached genre information. The widget automatically rescans afterward, but a full manual refresh is required to download the genre metadata again.
 
 Using the manual refresh button updates cached metadata and artwork when new data is available.
 
@@ -213,6 +258,10 @@ Runtime cache files are intentionally excluded from the Git repository and insta
 Steam Banners automatically detects Steam libraries configured in Steam.
 
 The widget checks common Linux Steam installation locations and reads Steam's `libraryfolders.vdf` file to discover additional Steam library folders.
+
+If a configured Steam library is temporarily unavailable, for example because an external or secondary drive is not mounted, Steam Banners shows a warning in the widget.
+
+Unavailable libraries are not removed from Steam's configuration. They are simply skipped until the library path becomes available again.
 
 This means games stored on secondary or external drives are supported automatically, as long as:
 
@@ -277,8 +326,11 @@ Restart Plasma Shell afterward.
     │   ├── header.png
     │   └── placeholder.png
     ├── scripts/
+    │   ├── cache_manage.py
     │   ├── steam_library_scan.py
-    │   └── steam_scan.py
+    │   ├── steam_scan.py
+    │   ├── update_check.py
+    │   └── update_install.py
     └── ui/
         ├── GameGrid.qml
         ├── SteamScanner.qml
