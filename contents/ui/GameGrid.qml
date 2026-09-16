@@ -14,6 +14,8 @@ GridView {
     property int singleArtworkRevision: 0
     property int refreshedAppid: 0
     property var artworkRevisionByAppid: ({})
+    property var heroOverrideByAppid: ({})
+    property var logoOverrideByAppid: ({})
     property int sortMode: 0
     property string searchText: ""
     property string genreFilter: ""
@@ -54,6 +56,51 @@ GridView {
 
         revisions[key] = singleArtworkRevision
         artworkRevisionByAppid = revisions
+    }
+
+    function setArtworkOverride(
+        appid,
+        artworkType,
+        path
+    ) {
+        var key = String(appid)
+
+        if (artworkType === "hero") {
+            var heroes = Object.assign(
+                {},
+                heroOverrideByAppid
+            )
+
+            heroes[key] = path
+            heroOverrideByAppid = heroes
+
+        } else if (artworkType === "logo") {
+            var logos = Object.assign(
+                {},
+                logoOverrideByAppid
+            )
+
+            logos[key] = path
+            logoOverrideByAppid = logos
+        }
+
+        refreshSingleArtwork(appid)
+    }
+
+    function heroPath(game) {
+        var key = String(game.appid)
+
+        return heroOverrideByAppid[key]
+        || game.hero
+        || ""
+    }
+
+    function logoPath(game) {
+        var key = String(game.appid)
+
+        return logoOverrideByAppid[key]
+        || game.logo
+        || ""
     }
 
     function favoriteIds() {
@@ -365,9 +412,9 @@ GridView {
                 id: heroContainer
 
                 anchors.fill: parent
-                visible: modelData.hero !== undefined
-                && modelData.hero !== null
-                && modelData.hero !== ""
+
+                visible:
+                    grid.heroPath(modelData) !== ""
 
                 layer.enabled: true
                 layer.effect: OpacityMask {
@@ -384,9 +431,9 @@ GridView {
                     anchors.fill: parent
 
                     source: heroContainer.visible
-                    ? "file://" + modelData.hero
+                    ? "file://" + grid.heroPath(modelData)
                         + "?v=" + grid.artworkVersion(modelData.appid)
-                        : ""
+                    : ""
 
                     fillMode: Image.PreserveAspectCrop
 
@@ -474,14 +521,13 @@ GridView {
                 anchors.topMargin: 7
                 anchors.bottomMargin: 7
 
-                visible: modelData.logo !== undefined
-                         && modelData.logo !== null
-                         && modelData.logo !== ""
+                visible:
+                    grid.logoPath(modelData) !== ""
 
                 source: visible
-                ? "file://" + modelData.logo
+                ? "file://" + grid.logoPath(modelData)
                     + "?v=" + grid.artworkVersion(modelData.appid)
-                    : ""
+                : ""
 
                 fillMode: Image.PreserveAspectFit
 

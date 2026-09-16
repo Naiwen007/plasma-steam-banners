@@ -26,6 +26,13 @@ METADATA_FILE = CACHE_DIR / "game_metadata.json"
 
 KEY_FILE = Path.home() / ".config" / "steambanners" / "steamgriddb.key"
 
+ARTWORK_SELECTIONS_FILE = (
+    Path.home()
+    / ".config"
+    / "steambanners"
+    / "artwork_selections.json"
+)
+
 API_BASE = "https://www.steamgriddb.com/api/v2"
 
 STEAM_ASSET_BASE = (
@@ -92,6 +99,61 @@ def load_api_key():
 
     except Exception:
         return None
+
+def load_artwork_selections():
+    try:
+        data = json.loads(
+            ARTWORK_SELECTIONS_FILE.read_text(
+                encoding="utf-8"
+            )
+        )
+
+        return data if isinstance(data, dict) else {}
+
+    except FileNotFoundError:
+        return {}
+
+    except Exception as e:
+        print(
+            f"Could not load artwork selections: {e}",
+            file=sys.stderr
+        )
+        return {}
+
+
+def save_artwork_selections(selections):
+    try:
+        ARTWORK_SELECTIONS_FILE.parent.mkdir(
+            parents=True,
+            exist_ok=True
+        )
+
+        temporary_file = (
+            ARTWORK_SELECTIONS_FILE
+            .with_suffix(".tmp")
+        )
+
+        temporary_file.write_text(
+            json.dumps(
+                selections,
+                ensure_ascii=False,
+                indent=2
+            ),
+            encoding="utf-8"
+        )
+
+        temporary_file.replace(
+            ARTWORK_SELECTIONS_FILE
+        )
+
+        return True
+
+    except Exception as e:
+        print(
+            f"Could not save artwork selections: {e}",
+            file=sys.stderr
+        )
+        return False
 
 
 def api_request(url, api_key):
@@ -386,6 +448,31 @@ def save_selected_artwork(
         target_dir,
         path
     )
+
+    selections = load_artwork_selections()
+    appid_key = str(appid)
+
+    game_selection = selections.get(
+        appid_key,
+        {}
+    )
+
+    if not isinstance(game_selection, dict):
+        game_selection = {}
+
+    game_selection[artwork_type] = url
+    selections[appid_key] = game_selection
+
+    if not save_artwork_selections(
+        selections
+    ):
+        return {
+            "success": False,
+            "error": (
+                "Artwork was saved, but the "
+                "selection could not be remembered."
+            )
+        }
 
     return {
         "success": True,
@@ -1425,6 +1512,24 @@ def refresh_artwork(game, api_key):
     if not appid:
         return
 
+    selections = load_artwork_selections()
+
+    game_selection = selections.get(
+        str(appid),
+        {}
+    )
+
+    if not isinstance(game_selection, dict):
+        game_selection = {}
+
+    selected_logo_url = game_selection.get(
+        "logo"
+    )
+
+    selected_hero_url = game_selection.get(
+        "hero"
+    )
+
     sgdb_id = None
 
     if api_key:
@@ -1439,7 +1544,19 @@ def refresh_artwork(game, api_key):
 
     logo_path = None
 
-    if sgdb_id:
+    if selected_logo_url:
+        logo_path = download_logo(
+            selected_logo_url,
+            appid,
+            overwrite=True
+        )
+
+        if logo_path:
+            game["logo"] = logo_path
+            game["logoUrl"] = selected_logo_url
+            game["logoSource"] = "user-selection"
+
+    if not logo_path and sgdb_id:
         logo_urls = get_logo_urls(
             sgdb_id,
             api_key
@@ -1498,7 +1615,20 @@ def refresh_artwork(game, api_key):
 
     hero_path = None
 
-    if sgdb_id:
+    if selected_hero_url:
+        hero_path = download_image(
+            selected_hero_url,
+            appid,
+            HERO_DIR,
+            overwrite=True
+        )
+
+        if hero_path:
+            game["hero"] = hero_path
+            game["heroUrl"] = selected_hero_url
+            game["heroSource"] = "user-selection"
+
+    if not hero_path and sgdb_id:
         hero_url = get_hero_url(
             sgdb_id,
             api_key

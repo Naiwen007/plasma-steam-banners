@@ -119,8 +119,10 @@ PlasmoidItem {
         ) {
             heroChooserPopup.close()
 
-            gameGrid.refreshSingleArtwork(
-                appid
+            gameGrid.setArtworkOverride(
+                appid,
+                artworkType,
+                path
             )
         }
 
