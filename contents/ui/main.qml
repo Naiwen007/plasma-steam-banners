@@ -22,6 +22,7 @@ PlasmoidItem {
     property bool searchOpen: false
     property int artworkChooserAppid: 0
     property string artworkChooserType: ""
+    property string artworkChooserMessage: ""
 
     property bool noGamesFound:
     !scanner.scanning
@@ -101,7 +102,13 @@ PlasmoidItem {
         }
 
         onArtworkOptionsFinished: function(appid) {
+            root.artworkChooserMessage = ""
             root.artworkChooserAppid = appid
+            heroChooserPopup.open()
+        }
+
+        onArtworkOptionsFailed: function(error) {
+            root.artworkChooserMessage = error
             heroChooserPopup.open()
         }
 
@@ -115,6 +122,10 @@ PlasmoidItem {
             gameGrid.refreshSingleArtwork(
                 appid
             )
+        }
+
+        onArtworkSelectionFailed: function(error) {
+            root.artworkChooserMessage = error
         }
 
     }
@@ -1499,6 +1510,14 @@ PlasmoidItem {
 
                     cellHeight: 150
 
+                    visible:
+                    root.artworkChooserMessage === ""
+                    && (
+                        root.artworkChooserType === "logo"
+                        ? scanner.artworkLogos.length > 0
+                        : scanner.artworkHeroes.length > 0
+                    )
+
                     model:
                         root.artworkChooserType === "logo"
                         ? scanner.artworkLogos
@@ -1548,6 +1567,8 @@ PlasmoidItem {
                                 Qt.PointingHandCursor
 
                                 onClicked: {
+                                    root.artworkChooserMessage = ""
+
                                     scanner.selectArtwork(
                                         root.artworkChooserAppid,
                                         root.artworkChooserType,
@@ -1557,6 +1578,58 @@ PlasmoidItem {
                             }
                         }
                     }
+                }
+            }
+
+            Column {
+                anchors.centerIn: parent
+
+                width: Math.min(
+                    parent.width - 60,
+                    360
+                )
+
+                spacing: 10
+
+                visible:
+                root.artworkChooserMessage !== ""
+                || (
+                    !scanner.artworkOptionsLoading
+                    && (
+                        root.artworkChooserType === "logo"
+                        ? scanner.artworkLogos.length === 0
+                        : scanner.artworkHeroes.length === 0
+                    )
+                )
+
+                Text {
+                    anchors.horizontalCenter:
+                    parent.horizontalCenter
+
+                    text: "!"
+                    color: "#55bce8"
+
+                    font.pixelSize: 32
+                    font.bold: true
+                }
+
+                Text {
+                    width: parent.width
+
+                    text:
+                    root.artworkChooserMessage !== ""
+                    ? root.artworkChooserMessage
+                    : i18n("No artwork found.")
+
+                    color: "#dbe7ee"
+
+                    font.pixelSize: 14
+
+                    horizontalAlignment:
+                    Text.AlignHCenter
+
+                    wrapMode:
+                    Text.WordWrap
                 }
             }
         }
