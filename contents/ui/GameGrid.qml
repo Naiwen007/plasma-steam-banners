@@ -16,6 +16,8 @@ GridView {
     property var artworkRevisionByAppid: ({})
     property var heroOverrideByAppid: ({})
     property var logoOverrideByAppid: ({})
+    property var manualHeroSelectionState: ({})
+    property var manualLogoSelectionState: ({})
     property int sortMode: 0
     property string searchText: ""
     property string genreFilter: ""
@@ -25,6 +27,8 @@ GridView {
     signal refreshArtworkRequested(int appid)
     signal chooseHeroRequested(int appid)
     signal chooseLogoRequested(int appid)
+    signal clearHeroSelectionRequested(int appid)
+    signal clearLogoSelectionRequested(int appid)
 
     property var games: []
     property string favoritesString: ""
@@ -85,6 +89,92 @@ GridView {
         }
 
         refreshSingleArtwork(appid)
+    }
+
+    function clearArtworkOverride(
+        appid,
+        artworkType
+    ) {
+        var key = String(appid)
+
+        if (artworkType === "hero") {
+            var heroes = Object.assign(
+                {},
+                heroOverrideByAppid
+            )
+
+            delete heroes[key]
+            heroOverrideByAppid = heroes
+
+        } else if (artworkType === "logo") {
+            var logos = Object.assign(
+                {},
+                logoOverrideByAppid
+            )
+
+            delete logos[key]
+            logoOverrideByAppid = logos
+        }
+
+        refreshSingleArtwork(appid)
+    }
+
+    function hasManualArtworkSelection(
+        game,
+        artworkType
+    ) {
+        var key = String(game.appid)
+
+        if (artworkType === "hero") {
+            if (
+                manualHeroSelectionState[key]
+                !== undefined
+            ) {
+                return manualHeroSelectionState[key]
+            }
+
+            return game.manualHeroSelection === true
+        }
+
+        if (artworkType === "logo") {
+            if (
+                manualLogoSelectionState[key]
+                !== undefined
+            ) {
+                return manualLogoSelectionState[key]
+            }
+
+            return game.manualLogoSelection === true
+        }
+
+        return false
+    }
+
+    function setManualArtworkSelection(
+        appid,
+        artworkType,
+        selected
+    ) {
+        var key = String(appid)
+
+        if (artworkType === "hero") {
+            var heroes = Object.assign(
+                {},
+                manualHeroSelectionState
+            )
+
+            heroes[key] = selected === true
+            manualHeroSelectionState = heroes
+
+        } else if (artworkType === "logo") {
+            var logos = Object.assign(
+                {},
+                manualLogoSelectionState
+            )
+
+            logos[key] = selected === true
+            manualLogoSelectionState = logos
+        }
     }
 
     function heroPath(game) {
@@ -748,27 +838,69 @@ GridView {
                     }
                 }
 
-                QQC2.MenuItem {
-                    text: i18n("Choose hero artwork")
+                QQC2.Menu {
+                    title: i18n("Hero artwork")
 
-                    enabled: !grid.scanBusy
+                    QQC2.MenuItem {
+                        text: i18n("Choose...")
 
-                    onTriggered: {
-                        grid.chooseHeroRequested(
-                            modelData.appid
-                        )
+                        enabled: !grid.scanBusy
+
+                        onTriggered: {
+                            grid.chooseHeroRequested(
+                                modelData.appid
+                            )
+                        }
+                    }
+
+                    QQC2.MenuItem {
+                        text: i18n("Use automatic")
+
+                        enabled:
+                            !grid.scanBusy
+                            && grid.hasManualArtworkSelection(
+                                modelData,
+                                "hero"
+                            )
+
+                        onTriggered: {
+                            grid.clearHeroSelectionRequested(
+                                modelData.appid
+                            )
+                        }
                     }
                 }
 
-                QQC2.MenuItem {
-                    text: i18n("Choose logo artwork")
+                QQC2.Menu {
+                    title: i18n("Logo artwork")
 
-                    enabled: !grid.scanBusy
+                    QQC2.MenuItem {
+                        text: i18n("Choose...")
 
-                    onTriggered: {
-                        grid.chooseLogoRequested(
-                            modelData.appid
-                        )
+                        enabled: !grid.scanBusy
+
+                        onTriggered: {
+                            grid.chooseLogoRequested(
+                                modelData.appid
+                            )
+                        }
+                    }
+
+                    QQC2.MenuItem {
+                        text: i18n("Use automatic")
+
+                        enabled:
+                            !grid.scanBusy
+                            && grid.hasManualArtworkSelection(
+                                modelData,
+                                "logo"
+                            )
+
+                        onTriggered: {
+                            grid.clearLogoSelectionRequested(
+                                modelData.appid
+                            )
+                        }
                     }
                 }
 

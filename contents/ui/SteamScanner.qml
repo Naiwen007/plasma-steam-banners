@@ -22,6 +22,10 @@ QtObject {
     property string artworkSelectionOutput: ""
     property int artworkSelectionAppid: 0
     property string artworkSelectionType: ""
+    property bool artworkClearRunning: false
+    property string artworkClearOutput: ""
+    property int artworkClearAppid: 0
+    property string artworkClearType: ""
 
     property string scriptPath: {
         var url = Qt.resolvedUrl(
@@ -72,9 +76,34 @@ QtObject {
                     )
 
                     if (refreshedAppid > 0) {
+                        var refreshedGame = null
+
+                        for (
+                            var resultIndex = 0;
+                        resultIndex < result.length;
+                        resultIndex++
+                        ) {
+                            if (
+                                Number(result[resultIndex].appid)
+                                === refreshedAppid
+                            ) {
+                                refreshedGame =
+                                result[resultIndex]
+
+                                break
+                            }
+                        }
+
                         scanner.singleGameRefreshFinished(
-                            refreshedAppid
+                            refreshedAppid,
+                            refreshedGame && refreshedGame.hero
+                            ? refreshedGame.hero
+                            : "",
+                            refreshedGame && refreshedGame.logo
+                            ? refreshedGame.logo
+                            : ""
                         )
+
                     } else {
                         scanner.games = result
                         scanner.scanFinished()
@@ -205,6 +234,60 @@ QtObject {
         }
     }
 
+    property Process artworkClearProcess: Process {
+        onOutputReady: function(output) {
+            scanner.artworkClearOutput += output
+        }
+
+        onErrorOccurred: function(error) {
+            scanner.artworkClearRunning = false
+            scanner.artworkClearOutput = ""
+            scanner.artworkClearAppid = 0
+            scanner.artworkClearType = ""
+        }
+
+        onFinished: function(exitCode) {
+            var appid =
+            scanner.artworkClearAppid
+
+            var artworkType =
+            scanner.artworkClearType
+
+            if (exitCode === 0) {
+                try {
+                    var result = JSON.parse(
+                        scanner.artworkClearOutput
+                    )
+
+                    if (result.success === true) {
+                        scanner.artworkClearFinished(
+                            appid,
+                            artworkType
+                        )
+                    } else {
+                        scanner.artworkClearFailed(
+                            result.error || "Unknown error"
+                        )
+                    }
+
+                } catch (error) {
+                    scanner.artworkClearFailed(
+                        String(error)
+                    )
+                }
+            } else {
+                scanner.artworkClearFailed(
+                    "Could not clear artwork selection."
+                )
+            }
+
+            scanner.artworkClearOutput = ""
+            scanner.artworkClearRunning = false
+            scanner.artworkClearAppid = 0
+            scanner.artworkClearType = ""
+        }
+    }
+
     property Process libraryStatusProcess: Process {
         onOutputReady: function(output) {
             scanner.libraryStatusOutput += output
@@ -257,7 +340,11 @@ QtObject {
     }
 
     signal scanFinished()
-    signal singleGameRefreshFinished(int appid)
+    signal singleGameRefreshFinished(
+        int appid,
+        string heroPath,
+        string logoPath
+    )
     signal artworkOptionsFinished(int appid)
     signal artworkOptionsFailed(string error)
     signal artworkSelectionFinished(
@@ -267,6 +354,13 @@ QtObject {
     )
 
     signal artworkSelectionFailed(string error)
+
+    signal artworkClearFinished(
+        int appid,
+        string artworkType
+    )
+
+    signal artworkClearFailed(string error)
 
     function loadLibraryStatus() {
         libraryStatusOutput = ""
@@ -341,6 +435,46 @@ QtObject {
                 String(id),
                                       artworkType,
                                       url
+            ]
+        )
+    }
+
+    function clearArtworkSelection(
+        appid,
+        artworkType
+    ) {
+        if (
+            artworkClearRunning
+            || artworkSelectionSaving
+        ) {
+            return
+        }
+
+        var id = Number(appid)
+
+        if (
+            !isFinite(id)
+            || id <= 0
+            || (
+                artworkType !== "logo"
+                && artworkType !== "hero"
+            )
+        ) {
+            return
+        }
+
+        artworkClearOutput = ""
+        artworkClearAppid = id
+        artworkClearType = artworkType
+        artworkClearRunning = true
+
+        artworkClearProcess.start(
+            "python3",
+            [
+                scriptPath,
+                "--clear-artwork-selection",
+                String(id),
+                                  artworkType
             ]
         )
     }

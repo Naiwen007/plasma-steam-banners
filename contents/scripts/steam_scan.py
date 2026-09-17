@@ -85,6 +85,17 @@ def parse_args():
         )
     )
 
+    parser.add_argument(
+        "--clear-artwork-selection",
+        nargs=2,
+        metavar=("APPID", "TYPE"),
+        default=None,
+        help=(
+            "Clear a manual artwork selection. "
+            "TYPE must be logo or hero."
+        )
+    )
+
     return parser.parse_args()
 
 
@@ -155,6 +166,82 @@ def save_artwork_selections(selections):
         )
         return False
 
+def clear_artwork_selection(
+    appid,
+    artwork_type
+):
+    if artwork_type not in [
+        "logo",
+        "hero"
+    ]:
+        return {
+            "success": False,
+            "error": "Unknown artwork type."
+        }
+
+    selections = load_artwork_selections()
+    appid_key = str(appid)
+
+    game_selection = selections.get(
+        appid_key
+    )
+
+    if not isinstance(
+        game_selection,
+        dict
+    ):
+        return {
+            "success": True,
+            "appid": appid,
+            "type": artwork_type,
+            "changed": False
+        }
+
+    if artwork_type not in game_selection:
+        return {
+            "success": True,
+            "appid": appid,
+            "type": artwork_type,
+            "changed": False
+        }
+
+    del game_selection[artwork_type]
+
+    if game_selection:
+        selections[appid_key] = game_selection
+    else:
+        selections.pop(
+            appid_key,
+            None
+        )
+
+    if not save_artwork_selections(
+        selections
+    ):
+        return {
+            "success": False,
+            "error": (
+                "Could not clear artwork selection."
+            )
+        }
+
+    target_dir = (
+        LOGO_DIR
+        if artwork_type == "logo"
+        else HERO_DIR
+    )
+
+    remove_cached_artwork_variants(
+        appid,
+        target_dir
+    )
+
+    return {
+        "success": True,
+        "appid": appid,
+        "type": artwork_type,
+        "changed": True
+    }
 
 def api_request(url, api_key):
     request = urllib.request.Request(
@@ -379,6 +466,32 @@ def remove_old_artwork_variants(
                 file=sys.stderr
             )
 
+def remove_cached_artwork_variants(
+    appid,
+    target_dir
+):
+    for suffix in [
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp"
+    ]:
+        candidate = (
+            target_dir / f"{appid}{suffix}"
+        )
+
+        if not candidate.exists():
+            continue
+
+        try:
+            candidate.unlink()
+
+        except Exception as e:
+            print(
+                f"Could not remove cached artwork "
+                f"{candidate}: {e}",
+                file=sys.stderr
+            )
 
 def save_selected_artwork(
     appid,
@@ -1638,10 +1751,17 @@ def refresh_artwork(game, api_key):
             hero_path = download_image(
                 hero_url,
                 appid,
-                HERO_DIR
+                HERO_DIR,
+                overwrite=True
             )
 
             if hero_path:
+                remove_old_artwork_variants(
+                    appid,
+                    HERO_DIR,
+                    hero_path
+                )
+
                 game["hero"] = hero_path
                 game["heroUrl"] = hero_url
                 game["heroSource"] = "steamgriddb"
@@ -1686,6 +1806,34 @@ def refresh_artwork(game, api_key):
 
 def main():
     args = parse_args()
+
+    if args.clear_artwork_selection is not None:
+        appid_text, artwork_type = (
+            args.clear_artwork_selection
+        )
+
+        try:
+            appid = int(appid_text)
+
+        except ValueError:
+            print(json.dumps({
+                "success": False,
+                "error": "Invalid Steam app ID."
+            }))
+            return
+
+        result = clear_artwork_selection(
+            appid,
+            artwork_type
+        )
+
+        print(
+            json.dumps(
+                result,
+                ensure_ascii=False
+            )
+        )
+        return
 
     if args.select_artwork is not None:
         appid_text, artwork_type, url = (
@@ -1737,6 +1885,7 @@ def main():
 
     api_key = load_api_key()
     metadata_cache = load_metadata_cache()
+    artwork_selections = load_artwork_selections()
 
     if args.refresh_artwork:
         print(
@@ -1761,6 +1910,27 @@ def main():
         games,
         start=1
     ):
+        appid = game.get("appid")
+
+        game_selection = artwork_selections.get(
+            str(appid),
+            {}
+        )
+
+        if not isinstance(
+            game_selection,
+            dict
+        ):
+            game_selection = {}
+
+        game["manualHeroSelection"] = bool(
+            game_selection.get("hero")
+        )
+
+        game["manualLogoSelection"] = bool(
+            game_selection.get("logo")
+        )
+
         name = game.get(
             "name",
             "Unknown"

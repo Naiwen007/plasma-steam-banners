@@ -92,13 +92,31 @@ PlasmoidItem {
             gameGrid.artworkRevision += 1
         }
 
-        onSingleGameRefreshFinished: function(appid) {
+        onSingleGameRefreshFinished: function(
+            appid,
+            heroPath,
+            logoPath
+        ) {
             console.log(
                 "### SINGLE GAME REFRESH FINISHED:",
                 appid
             )
 
-            gameGrid.refreshSingleArtwork(appid)
+            if (heroPath) {
+                gameGrid.setArtworkOverride(
+                    appid,
+                    "hero",
+                    heroPath
+                )
+            }
+
+            if (logoPath) {
+                gameGrid.setArtworkOverride(
+                    appid,
+                    "logo",
+                    logoPath
+                )
+            }
         }
 
         onArtworkOptionsFinished: function(appid) {
@@ -124,10 +142,36 @@ PlasmoidItem {
                 artworkType,
                 path
             )
+
+            gameGrid.setManualArtworkSelection(
+                appid,
+                artworkType,
+                true
+            )
         }
 
         onArtworkSelectionFailed: function(error) {
             root.artworkChooserMessage = error
+        }
+
+        onArtworkClearFinished: function(
+            appid,
+            artworkType
+        ) {
+            gameGrid.setManualArtworkSelection(
+                appid,
+                artworkType,
+                false
+            )
+
+            scanner.scanGame(appid)
+        }
+
+        onArtworkClearFailed: function(error) {
+            console.log(
+                "### ARTWORK CLEAR FAILED:",
+                error
+            )
         }
 
     }
@@ -1258,6 +1302,20 @@ PlasmoidItem {
             onChooseLogoRequested: function(appid) {
                 root.artworkChooserType = "logo"
                 scanner.loadArtworkOptions(appid)
+            }
+
+            onClearHeroSelectionRequested: function(appid) {
+                scanner.clearArtworkSelection(
+                    appid,
+                    "hero"
+                )
+            }
+
+            onClearLogoSelectionRequested: function(appid) {
+                scanner.clearArtworkSelection(
+                    appid,
+                    "logo"
+                )
             }
 
         }
