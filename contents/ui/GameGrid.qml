@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Controls as QQC2
-import SteamBanners.Process
 import Qt5Compat.GraphicalEffects
 
 GridView {
@@ -21,6 +20,7 @@ GridView {
     property int sortMode: 0
     property string searchText: ""
     property string genreFilter: ""
+    property string storeFilter: ""
     property bool scanBusy: false
     property int refreshingAppid: 0
 
@@ -29,6 +29,7 @@ GridView {
     signal chooseLogoRequested(int appid)
     signal clearHeroSelectionRequested(int appid)
     signal clearLogoSelectionRequested(int appid)
+    signal launchRequested(var game)
 
     property var games: []
     property string favoritesString: ""
@@ -40,8 +41,95 @@ GridView {
 
     model: sortedGames
 
-    function artworkVersion(appid) {
-        var key = String(appid)
+    function gameKey(value) {
+        if (
+            value
+            && typeof value === "object"
+        ) {
+            if (value.gameId) {
+                return String(value.gameId)
+            }
+
+            if (
+                value.appid !== undefined
+                && value.appid !== null
+            ) {
+                return (
+                    "steam:"
+                    + String(value.appid)
+                )
+            }
+
+            return ""
+        }
+
+        var text = String(
+            value !== undefined
+            && value !== null
+            ? value
+            : ""
+        )
+
+        if (text === "") {
+            return ""
+        }
+
+        if (text.indexOf(":") !== -1) {
+            return text
+        }
+
+        return "steam:" + text
+    }
+
+    function gameStore(game) {
+        if (!game) {
+            return ""
+        }
+
+        if (
+            game.store !== undefined
+            && game.store !== null
+            && String(game.store) !== ""
+        ) {
+            return String(
+                game.store
+            ).toLowerCase()
+        }
+
+        if (
+            game.appid !== undefined
+            && game.appid !== null
+        ) {
+            return "steam"
+        }
+
+        return ""
+    }
+
+    function isSteamGame(game) {
+        if (!game) {
+            return false
+        }
+
+        if (
+            game.provider !== undefined
+            && game.provider !== null
+            && String(game.provider) !== ""
+        ) {
+            return (
+                String(game.provider).toLowerCase()
+                === "steam"
+            )
+        }
+
+        return (
+            game.appid !== undefined
+            && game.appid !== null
+        )
+    }
+
+    function artworkVersion(value) {
+        var key = gameKey(value)
         var gameRevision =
         artworkRevisionByAppid[key] || 0
 
@@ -49,7 +137,7 @@ GridView {
     }
 
     function refreshSingleArtwork(appid) {
-        var key = String(appid)
+        var key = gameKey(appid)
         var revisions = Object.assign(
             {},
             artworkRevisionByAppid
@@ -67,7 +155,7 @@ GridView {
         artworkType,
         path
     ) {
-        var key = String(appid)
+        var key = gameKey(appid)
 
         if (artworkType === "hero") {
             var heroes = Object.assign(
@@ -95,7 +183,7 @@ GridView {
         appid,
         artworkType
     ) {
-        var key = String(appid)
+        var key = gameKey(appid)
 
         if (artworkType === "hero") {
             var heroes = Object.assign(
@@ -123,7 +211,7 @@ GridView {
         game,
         artworkType
     ) {
-        var key = String(game.appid)
+        var key = gameKey(game)
 
         if (artworkType === "hero") {
             if (
@@ -155,7 +243,7 @@ GridView {
         artworkType,
         selected
     ) {
-        var key = String(appid)
+        var key = gameKey(appid)
 
         if (artworkType === "hero") {
             var heroes = Object.assign(
@@ -178,7 +266,7 @@ GridView {
     }
 
     function heroPath(game) {
-        var key = String(game.appid)
+        var key = gameKey(game)
 
         return heroOverrideByAppid[key]
         || game.hero
@@ -186,7 +274,7 @@ GridView {
     }
 
     function logoPath(game) {
-        var key = String(game.appid)
+        var key = gameKey(game)
 
         return logoOverrideByAppid[key]
         || game.logo
@@ -194,23 +282,51 @@ GridView {
     }
 
     function favoriteIds() {
-        if (!favoritesString || favoritesString === "") {
+        if (
+            !favoritesString
+            || favoritesString === ""
+        ) {
             return []
         }
 
-        return favoritesString
-            .split(",")
-            .filter(function(id) {
-                return id !== ""
-            })
+        var normalized = []
+
+        favoritesString
+        .split(",")
+        .filter(function(id) {
+            return id !== ""
+        })
+        .forEach(function(id) {
+            var key = gameKey(id)
+
+            if (
+                key !== ""
+                && normalized.indexOf(key) === -1
+            ) {
+                normalized.push(key)
+            }
+        })
+
+        return normalized
     }
 
-    function isFavorite(appid) {
-        return favoriteIds().indexOf(String(appid)) !== -1
+    function isFavorite(value) {
+        var key = gameKey(value)
+
+        if (key === "") {
+            return false
+        }
+
+        return favoriteIds().indexOf(key) !== -1
     }
 
-    function toggleFavorite(appid) {
-        var key = String(appid)
+    function toggleFavorite(value) {
+        var key = gameKey(value)
+
+        if (key === "") {
+            return
+        }
+
         var ids = favoriteIds()
         var index = ids.indexOf(key)
 
@@ -292,7 +408,14 @@ GridView {
         for (var i = 0; i < games.length; ++i) {
             var game = games[i]
 
-            if (sortMode === 2 && !isFavorite(game.appid)) {
+            if (sortMode === 2 && !isFavorite(game)) {
+                continue
+            }
+
+            if (
+                storeFilter !== ""
+                && gameStore(game) !== storeFilter
+            ) {
                 continue
             }
 
@@ -318,8 +441,8 @@ GridView {
 
         result.sort(function(a, b) {
             if (sortMode === 1) {
-                var favoriteA = isFavorite(a.appid)
-                var favoriteB = isFavorite(b.appid)
+                var favoriteA = isFavorite(a)
+                var favoriteB = isFavorite(b)
 
                 if (favoriteA && !favoriteB) {
                     return -1
@@ -345,23 +468,13 @@ GridView {
     onFavoritesStringChanged: rebuildModel()
     onSearchTextChanged: rebuildModel()
     onGenreFilterChanged: rebuildModel()
+    onStoreFilterChanged: rebuildModel()
 
     Component.onCompleted: {
         rebuildGenres()
         rebuildModel()
     }
 
-    Process {
-        id: launcher
-
-        onErrorOccurred: function(error) {
-            console.log("### STEAM LAUNCH ERROR:", error)
-        }
-
-        onFinished: function(exitCode) {
-            console.log("### STEAM LAUNCH FINISHED:", exitCode)
-        }
-    }
 
     delegate: Item {
         id: delegateRoot
@@ -387,17 +500,17 @@ GridView {
             color: "transparent"
 
             border.width:
-            grid.isFavorite(modelData.appid)
+            grid.isFavorite(modelData)
             ? 2
             : 1
 
             border.color:
-            grid.isFavorite(modelData.appid)
+            grid.isFavorite(modelData)
             ? "#ffd34e"
             : "#28a9e8"
 
             opacity:
-            grid.isFavorite(modelData.appid)
+            grid.isFavorite(modelData)
             ? (mouseArea.containsMouse ? 0.90 : 0.60)
             : (mouseArea.containsMouse ? 0.55 : 0.0)
 
@@ -478,13 +591,13 @@ GridView {
             radius: 9
             color: "#0c151d"
 
-            border.color: grid.isFavorite(modelData.appid)
+            border.color: grid.isFavorite(modelData)
                 ? "#d5a72b"
                 : (mouseArea.containsMouse
                     ? "#45b9ee"
                     : "#304859")
 
-            border.width: grid.isFavorite(modelData.appid) ? 2 : 1
+            border.width: grid.isFavorite(modelData) ? 2 : 1
 
             clip: true
 
@@ -522,7 +635,7 @@ GridView {
 
                     source: heroContainer.visible
                     ? "file://" + grid.heroPath(modelData)
-                        + "?v=" + grid.artworkVersion(modelData.appid)
+                        + "?v=" + grid.artworkVersion(modelData)
                     : ""
 
                     fillMode: Image.PreserveAspectCrop
@@ -616,7 +729,7 @@ GridView {
 
                 source: visible
                 ? "file://" + grid.logoPath(modelData)
-                    + "?v=" + grid.artworkVersion(modelData.appid)
+                    + "?v=" + grid.artworkVersion(modelData)
                 : ""
 
                 fillMode: Image.PreserveAspectFit
@@ -666,7 +779,7 @@ GridView {
 
                 radius: card.radius - 1
 
-                visible: grid.isFavorite(modelData.appid)
+                visible: grid.isFavorite(modelData)
 
                 color: Qt.rgba(
                     1.0,
@@ -703,7 +816,7 @@ GridView {
 
                 z: 5
 
-                visible: grid.isFavorite(modelData.appid)
+                visible: grid.isFavorite(modelData)
 
                 text: "★"
                 color: "#ffd34e"
@@ -812,15 +925,15 @@ GridView {
             // ----------------------------------------------------
 
             QQC2.Menu {
-                id: contextMenu
+                id: steamContextMenu
 
                 QQC2.MenuItem {
-                    text: grid.isFavorite(modelData.appid)
-                        ? i18n("Remove from favorites")
-                        : i18n("Add to favorites")
+                    text: grid.isFavorite(modelData)
+                    ? i18n("Remove from favorites")
+                    : i18n("Add to favorites")
 
                     onTriggered: {
-                        grid.toggleFavorite(modelData.appid)
+                        grid.toggleFavorite(modelData)
                     }
                 }
 
@@ -857,11 +970,11 @@ GridView {
                         text: i18n("Use automatic")
 
                         enabled:
-                            !grid.scanBusy
-                            && grid.hasManualArtworkSelection(
-                                modelData,
-                                "hero"
-                            )
+                        !grid.scanBusy
+                        && grid.hasManualArtworkSelection(
+                            modelData,
+                            "hero"
+                        )
 
                         onTriggered: {
                             grid.clearHeroSelectionRequested(
@@ -890,11 +1003,11 @@ GridView {
                         text: i18n("Use automatic")
 
                         enabled:
-                            !grid.scanBusy
-                            && grid.hasManualArtworkSelection(
-                                modelData,
-                                "logo"
-                            )
+                        !grid.scanBusy
+                        && grid.hasManualArtworkSelection(
+                            modelData,
+                            "logo"
+                        )
 
                         onTriggered: {
                             grid.clearLogoSelectionRequested(
@@ -903,7 +1016,21 @@ GridView {
                         }
                     }
                 }
+            }
 
+
+            QQC2.Menu {
+                id: heroicContextMenu
+
+                QQC2.MenuItem {
+                    text: grid.isFavorite(modelData)
+                    ? i18n("Remove from favorites")
+                    : i18n("Add to favorites")
+
+                    onTriggered: {
+                        grid.toggleFavorite(modelData)
+                    }
+                }
             }
 
             // ----------------------------------------------------
@@ -921,15 +1048,17 @@ GridView {
 
                 onClicked: function(mouse) {
                     if (mouse.button === Qt.RightButton) {
-                        contextMenu.popup()
+                        if (grid.isSteamGame(modelData)) {
+                            steamContextMenu.popup()
+                        } else {
+                            heroicContextMenu.popup()
+                        }
+
                         return
                     }
 
                     if (mouse.button === Qt.LeftButton) {
-                        launcher.start(
-                            "steam",
-                            ["steam://rungameid/" + modelData.appid]
-                        )
+                        grid.launchRequested(modelData)
                     }
                 }
             }

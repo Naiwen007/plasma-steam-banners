@@ -20,6 +20,7 @@ PlasmoidItem {
         libraryWarningVisible ? 72 : 0
 
     property bool searchOpen: false
+    property string storeFilter: ""
     property int artworkChooserAppid: 0
     property string artworkChooserType: ""
     property string artworkChooserMessage: ""
@@ -40,6 +41,78 @@ PlasmoidItem {
     && scanner.games.length > 0
     && searchField.text.trim() !== ""
     && gameGrid.sortedGames.length === 0
+
+    function launchGame(game) {
+        if (!game) {
+            return
+        }
+
+        var provider = game.provider || ""
+
+        if (
+            provider === ""
+            && game.appid !== undefined
+        ) {
+            provider = "steam"
+        }
+
+        if (provider === "steam") {
+            var appid = (
+                game.providerId
+                || game.appid
+            )
+
+            if (!appid) {
+                return
+            }
+
+            gameLauncher.start(
+                "steam",
+                [
+                    "steam://rungameid/"
+                    + String(appid)
+                ]
+            )
+
+            return
+        }
+
+        if (provider === "heroic") {
+            var appName = game.providerId || ""
+            var runner = game.runner || ""
+
+            if (
+                appName === ""
+                || runner === ""
+            ) {
+                console.log(
+                    "### HEROIC LAUNCH DATA MISSING:",
+                    game.gameId || game.name || ""
+                )
+                return
+            }
+
+            var url = (
+                "heroic://launch"
+                + "?appName="
+                + encodeURIComponent(appName)
+                + "&runner="
+                + encodeURIComponent(runner)
+            )
+
+            gameLauncher.start(
+                "xdg-open",
+                [url]
+            )
+
+            return
+        }
+
+        console.log(
+            "### UNSUPPORTED GAME PROVIDER:",
+            provider
+        )
+    }
 
     FontLoader {
         id: orbitronFont
@@ -72,6 +145,28 @@ PlasmoidItem {
             )
 
             root.apiKeyAvailable = false
+        }
+    }
+
+    // ============================================================
+    // Game launcher
+    // ============================================================
+
+    Process {
+        id: gameLauncher
+
+        onErrorOccurred: function(error) {
+            console.log(
+                "### GAME LAUNCH ERROR:",
+                error
+            )
+        }
+
+        onFinished: function(exitCode) {
+            console.log(
+                "### GAME LAUNCH FINISHED:",
+                exitCode
+            )
         }
     }
 
@@ -559,6 +654,7 @@ PlasmoidItem {
                     radius: width / 2
 
                     visible: gameGrid.genreFilter !== ""
+                            || root.storeFilter !== ""
 
                     color: "#35d9ff"
 
@@ -583,12 +679,14 @@ PlasmoidItem {
                     genreButton.hovered
                     || genreMenu.opened
                     || gameGrid.genreFilter !== ""
+                    || root.storeFilter !== ""
                     ? 2
                     : 1
 
                     border.color:
                     genreMenu.opened
                     || gameGrid.genreFilter !== ""
+                    || root.storeFilter !== ""
                     ? "#35d9ff"
                     : genreButton.hovered
                     ? "#25d7ff"
@@ -611,9 +709,7 @@ PlasmoidItem {
                 hovered && !genreMenu.opened
 
                 QQC2.ToolTip.text:
-                gameGrid.genreFilter !== ""
-                ? i18n("Genre: %1", gameGrid.genreFilter)
-                : i18n("Filter by genre")
+                i18n("Filter games")
 
                 QQC2.Menu {
                     id: genreMenu
@@ -621,7 +717,64 @@ PlasmoidItem {
                     y: genreButton.height + 4
 
                     QQC2.MenuItem {
-                        text: i18n("All Games")
+                        text: i18n("All stores")
+
+                        checkable: true
+                        checked: root.storeFilter === ""
+
+                        onTriggered: {
+                            root.storeFilter = ""
+                        }
+                    }
+
+                    QQC2.MenuItem {
+                        text: i18n("Steam")
+
+                        checkable: true
+                        checked: root.storeFilter === "steam"
+
+                        onTriggered: {
+                            root.storeFilter = "steam"
+                        }
+                    }
+
+                    QQC2.MenuItem {
+                        text: i18n("Epic Games")
+
+                        checkable: true
+                        checked: root.storeFilter === "epic"
+
+                        onTriggered: {
+                            root.storeFilter = "epic"
+                        }
+                    }
+
+                    QQC2.MenuItem {
+                        text: i18n("GOG")
+
+                        checkable: true
+                        checked: root.storeFilter === "gog"
+
+                        onTriggered: {
+                            root.storeFilter = "gog"
+                        }
+                    }
+
+                    QQC2.MenuItem {
+                        text: i18n("Amazon Games")
+
+                        checkable: true
+                        checked: root.storeFilter === "amazon"
+
+                        onTriggered: {
+                            root.storeFilter = "amazon"
+                        }
+                    }
+
+                    QQC2.MenuSeparator {}
+
+                    QQC2.MenuItem {
+                        text: i18n("All genres")
 
                         checkable: true
                         checked: gameGrid.genreFilter === ""
@@ -642,26 +795,37 @@ PlasmoidItem {
                             text: modelData
 
                             checkable: true
+
                             checked:
                             gameGrid.genreFilter === modelData
 
                             onTriggered: {
-                                if (gameGrid.genreFilter === modelData) {
+                                if (
+                                    gameGrid.genreFilter
+                                    === modelData
+                                ) {
                                     gameGrid.genreFilter = ""
                                 } else {
-                                    gameGrid.genreFilter = modelData
+                                    gameGrid.genreFilter =
+                                    modelData
                                 }
                             }
                         }
 
-                        onObjectAdded: function(index, object) {
+                        onObjectAdded: function(
+                            index,
+                            object
+                        ) {
                             genreMenu.insertItem(
-                                index + 2,
+                                index + 8,
                                 object
                             )
                         }
 
-                        onObjectRemoved: function(index, object) {
+                        onObjectRemoved: function(
+                            index,
+                            object
+                        ) {
                             genreMenu.removeItem(
                                 object
                             )
@@ -1261,12 +1425,19 @@ PlasmoidItem {
             scanBusy: scanner.scanning
             refreshingAppid: scanner.refreshingAppid
 
+            onLaunchRequested: function(game) {
+                root.launchGame(game)
+            }
+
             onRefreshArtworkRequested: function(appid) {
                 scanner.scanGame(appid)
             }
 
             searchText:
             searchField.text
+
+            storeFilter:
+            root.storeFilter
 
             columns: Math.max(
                 1,

@@ -5,6 +5,10 @@ QtObject {
     id: scanner
 
     property var games: []
+    property var steamGames: []
+    property var heroicGames: []
+    property string heroicProcessOutput: ""
+    property bool heroicScanning: false
     property bool scanning: false
     property bool refreshingArtwork: false
     property int refreshingAppid: 0
@@ -39,6 +43,18 @@ QtObject {
         return decodeURIComponent(url)
     }
 
+    property string heroicScriptPath: {
+        var url = Qt.resolvedUrl(
+            "../scripts/heroic_scan.py"
+        ).toString()
+
+        if (url.startsWith("file://")) {
+            url = url.substring(7)
+        }
+
+        return decodeURIComponent(url)
+    }
+
     property Process process: Process {
         onOutputReady: function(output) {
             scanner.processOutput += output
@@ -50,9 +66,12 @@ QtObject {
                 error
             )
 
+            scanner.processOutput = ""
             scanner.scanning = false
             scanner.refreshingArtwork = false
             scanner.refreshingAppid = 0
+
+            scanner.loadLibraryStatus()
         }
 
         onFinished: function(exitCode) {
@@ -64,6 +83,8 @@ QtObject {
             var refreshedAppid =
             scanner.refreshingAppid
 
+            var waitingForHeroic = false
+
             if (exitCode === 0) {
                 try {
                     var result = JSON.parse(
@@ -71,7 +92,7 @@ QtObject {
                     )
 
                     console.log(
-                        "### GAMES PARSED:",
+                        "### STEAM GAMES PARSED:",
                         result.length
                     )
 
@@ -84,7 +105,9 @@ QtObject {
                         resultIndex++
                         ) {
                             if (
-                                Number(result[resultIndex].appid)
+                                Number(
+                                    result[resultIndex].appid
+                                )
                                 === refreshedAppid
                             ) {
                                 refreshedGame =
@@ -96,17 +119,21 @@ QtObject {
 
                         scanner.singleGameRefreshFinished(
                             refreshedAppid,
-                            refreshedGame && refreshedGame.hero
+                            refreshedGame
+                            && refreshedGame.hero
                             ? refreshedGame.hero
                             : "",
-                            refreshedGame && refreshedGame.logo
+                            refreshedGame
+                            && refreshedGame.logo
                             ? refreshedGame.logo
                             : ""
                         )
 
                     } else {
-                        scanner.games = result
-                        scanner.scanFinished()
+                        scanner.steamGames = result
+                        waitingForHeroic = true
+
+                        scanner.startHeroicScan()
                     }
 
                 } catch (error) {
@@ -118,11 +145,69 @@ QtObject {
             }
 
             scanner.processOutput = ""
-            scanner.scanning = false
-            scanner.refreshingArtwork = false
-            scanner.refreshingAppid = 0
 
-            scanner.loadLibraryStatus()
+            if (!waitingForHeroic) {
+                scanner.scanning = false
+                scanner.refreshingArtwork = false
+                scanner.refreshingAppid = 0
+
+                scanner.loadLibraryStatus()
+            }
+        }
+    }
+
+    property Process heroicProcess: Process {
+        onOutputReady: function(output) {
+            scanner.heroicProcessOutput += output
+        }
+
+        onErrorOccurred: function(error) {
+            console.log(
+                "### HEROIC PROCESS ERROR:",
+                error
+            )
+
+            scanner.heroicGames = []
+            scanner.finishCombinedScan()
+        }
+
+        onFinished: function(exitCode) {
+            if (!scanner.heroicScanning) {
+                return
+            }
+
+            console.log(
+                "### HEROIC PROCESS FINISHED:",
+                exitCode
+            )
+
+            if (exitCode === 0) {
+                try {
+                    var result = JSON.parse(
+                        scanner.heroicProcessOutput
+                    )
+
+                    scanner.heroicGames = result
+
+                    console.log(
+                        "### HEROIC GAMES PARSED:",
+                        result.length
+                    )
+
+                } catch (error) {
+                    console.log(
+                        "### HEROIC JSON ERROR:",
+                        error
+                    )
+
+                    scanner.heroicGames = []
+                }
+
+            } else {
+                scanner.heroicGames = []
+            }
+
+            scanner.finishCombinedScan()
         }
     }
 
@@ -515,6 +600,53 @@ QtObject {
                 String(id)
             ]
         )
+    }
+
+    function startHeroicScan() {
+        heroicProcessOutput = ""
+        heroicGames = []
+        heroicScanning = true
+
+        console.log(
+            "### STARTING HEROIC SCAN ###"
+        )
+
+        console.log(
+            "### HEROIC SCRIPT:",
+            heroicScriptPath
+        )
+
+        heroicProcess.start(
+            "python3",
+            [
+                heroicScriptPath
+            ]
+        )
+    }
+
+    function finishCombinedScan() {
+        if (!heroicScanning) {
+            return
+        }
+
+        heroicScanning = false
+
+        games = steamGames.concat(
+            heroicGames
+        )
+
+        console.log(
+            "### COMBINED GAMES:",
+            games.length
+        )
+
+        heroicProcessOutput = ""
+        scanning = false
+        refreshingArtwork = false
+        refreshingAppid = 0
+
+        scanFinished()
+        loadLibraryStatus()
     }
 
     function scan(refreshArtwork) {

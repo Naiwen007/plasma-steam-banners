@@ -1912,6 +1912,12 @@ def main():
     ):
         appid = game.get("appid")
 
+        if appid is not None:
+            game["gameId"] = f"steam:{appid}"
+            game["provider"] = "steam"
+            game["store"] = "steam"
+            game["providerId"] = str(appid)
+
         game_selection = artwork_selections.get(
             str(appid),
             {}
