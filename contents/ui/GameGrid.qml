@@ -24,11 +24,11 @@ GridView {
     property bool scanBusy: false
     property int refreshingAppid: 0
 
-    signal refreshArtworkRequested(int appid)
-    signal chooseHeroRequested(int appid)
-    signal chooseLogoRequested(int appid)
-    signal clearHeroSelectionRequested(int appid)
-    signal clearLogoSelectionRequested(int appid)
+    signal refreshArtworkRequested(var game)
+    signal chooseHeroRequested(var game)
+    signal chooseLogoRequested(var game)
+    signal clearHeroSelectionRequested(var game)
+    signal clearLogoSelectionRequested(var game)
     signal launchRequested(var game)
 
     property var games: []
@@ -946,7 +946,7 @@ GridView {
 
                     onTriggered: {
                         grid.refreshArtworkRequested(
-                            modelData.appid
+                            modelData
                         )
                     }
                 }
@@ -961,7 +961,7 @@ GridView {
 
                         onTriggered: {
                             grid.chooseHeroRequested(
-                                modelData.appid
+                                modelData
                             )
                         }
                     }
@@ -978,7 +978,7 @@ GridView {
 
                         onTriggered: {
                             grid.clearHeroSelectionRequested(
-                                modelData.appid
+                                modelData
                             )
                         }
                     }
@@ -994,7 +994,7 @@ GridView {
 
                         onTriggered: {
                             grid.chooseLogoRequested(
-                                modelData.appid
+                                modelData
                             )
                         }
                     }
@@ -1011,13 +1011,12 @@ GridView {
 
                         onTriggered: {
                             grid.clearLogoSelectionRequested(
-                                modelData.appid
+                                modelData
                             )
                         }
                     }
                 }
             }
-
 
             QQC2.Menu {
                 id: heroicContextMenu
@@ -1029,6 +1028,40 @@ GridView {
 
                     onTriggered: {
                         grid.toggleFavorite(modelData)
+                    }
+                }
+
+                QQC2.MenuSeparator {}
+
+                QQC2.Menu {
+                    title: i18n("Hero artwork")
+
+                    QQC2.MenuItem {
+                        text: i18n("Choose...")
+
+                        enabled: !grid.scanBusy
+
+                        onTriggered: {
+                            grid.chooseHeroRequested(
+                                modelData
+                            )
+                        }
+                    }
+                }
+
+                QQC2.Menu {
+                    title: i18n("Logo artwork")
+
+                    QQC2.MenuItem {
+                        text: i18n("Choose...")
+
+                        enabled: !grid.scanBusy
+
+                        onTriggered: {
+                            grid.chooseLogoRequested(
+                                modelData
+                            )
+                        }
                     }
                 }
             }

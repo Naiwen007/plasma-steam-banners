@@ -21,10 +21,13 @@ QtObject {
     property int artworkOptionsAppid: 0
     property var artworkLogos: []
     property var artworkHeroes: []
+    property string artworkOptionsGameId: ""
+    property string artworkOptionsTitle: ""
     property string artworkOptionsOutput: ""
     property bool artworkSelectionSaving: false
     property string artworkSelectionOutput: ""
     property int artworkSelectionAppid: 0
+    property var artworkSelectionGame: null
     property string artworkSelectionType: ""
     property bool artworkClearRunning: false
     property string artworkClearOutput: ""
@@ -220,6 +223,8 @@ QtObject {
             scanner.artworkOptionsLoading = false
             scanner.artworkOptionsAppid = 0
             scanner.artworkOptionsOutput = ""
+            scanner.artworkOptionsGameId = ""
+            scanner.artworkOptionsTitle = ""
         }
 
         onFinished: function(exitCode) {
@@ -261,6 +266,8 @@ QtObject {
             scanner.artworkOptionsOutput = ""
             scanner.artworkOptionsLoading = false
             scanner.artworkOptionsAppid = 0
+            scanner.artworkOptionsGameId = ""
+            scanner.artworkOptionsTitle = ""
         }
     }
 
@@ -274,11 +281,12 @@ QtObject {
             scanner.artworkSelectionOutput = ""
             scanner.artworkSelectionAppid = 0
             scanner.artworkSelectionType = ""
+            scanner.artworkSelectionGame = null
         }
 
         onFinished: function(exitCode) {
-            var appid =
-            scanner.artworkSelectionAppid
+            var game =
+            scanner.artworkSelectionGame
 
             var artworkType =
             scanner.artworkSelectionType
@@ -291,7 +299,7 @@ QtObject {
 
                     if (result.success === true) {
                         scanner.artworkSelectionFinished(
-                            appid,
+                            game,
                             artworkType,
                             result.path
                         )
@@ -316,6 +324,7 @@ QtObject {
             scanner.artworkSelectionSaving = false
             scanner.artworkSelectionAppid = 0
             scanner.artworkSelectionType = ""
+            scanner.artworkSelectionGame = null
         }
     }
 
@@ -433,7 +442,7 @@ QtObject {
     signal artworkOptionsFinished(int appid)
     signal artworkOptionsFailed(string error)
     signal artworkSelectionFinished(
-        int appid,
+        var game,
         string artworkType,
         string path
     )
@@ -461,22 +470,53 @@ QtObject {
         )
     }
 
-    function loadArtworkOptions(appid) {
+    function loadArtworkOptions(game) {
         if (artworkOptionsLoading) {
             return
         }
 
-        var id = Number(appid)
-
-        if (!isFinite(id) || id <= 0) {
+        if (!game) {
             return
         }
 
         artworkOptionsOutput = ""
         artworkLogos = []
         artworkHeroes = []
-        artworkOptionsAppid = id
+
         artworkOptionsLoading = true
+
+        if (game.provider === "heroic") {
+            artworkOptionsAppid = 0
+            artworkOptionsGameId =
+            game.gameId || ""
+            artworkOptionsTitle =
+            game.name || ""
+
+            artworkOptionsProcess.start(
+                "python3",
+                [
+                    heroicScriptPath,
+                    "--list-artwork",
+                    artworkOptionsGameId,
+                    artworkOptionsTitle
+                ]
+            )
+
+            return
+        }
+
+        var id = Number(game.appid)
+
+        if (!isFinite(id) || id <= 0) {
+            artworkOptionsLoading = false
+            return
+        }
+
+        artworkOptionsAppid = id
+        artworkOptionsGameId =
+        game.gameId || ""
+        artworkOptionsTitle =
+        game.name || ""
 
         artworkOptionsProcess.start(
             "python3",
@@ -489,7 +529,7 @@ QtObject {
     }
 
     function selectArtwork(
-        appid,
+        game,
         artworkType,
         url
     ) {
@@ -497,20 +537,73 @@ QtObject {
             return
         }
 
-        var id = Number(appid)
-
         if (
-            !isFinite(id)
-            || id <= 0
+            !game
             || !url
+            || (
+                artworkType !== "logo"
+                && artworkType !== "hero"
+            )
         ) {
             return
         }
 
         artworkSelectionOutput = ""
-        artworkSelectionAppid = id
+        artworkSelectionGame = game
         artworkSelectionType = artworkType
         artworkSelectionSaving = true
+
+        var provider = game.provider || ""
+
+        if (
+            provider === ""
+            && game.appid !== undefined
+        ) {
+            provider = "steam"
+        }
+
+        if (provider === "heroic") {
+            var gameId = game.gameId || ""
+            var store = game.store || ""
+            var providerId = game.providerId || ""
+
+            if (
+                gameId === ""
+                || store === ""
+                || providerId === ""
+            ) {
+                artworkSelectionSaving = false
+                artworkSelectionGame = null
+                artworkSelectionType = ""
+                return
+            }
+
+            artworkSelectionProcess.start(
+                "python3",
+                [
+                    heroicScriptPath,
+                    "--select-artwork",
+                    gameId,
+                    store,
+                    providerId,
+                    artworkType,
+                    url
+                ]
+            )
+
+            return
+        }
+
+        var id = Number(game.appid)
+
+        if (!isFinite(id) || id <= 0) {
+            artworkSelectionSaving = false
+            artworkSelectionGame = null
+            artworkSelectionType = ""
+            return
+        }
+
+        artworkSelectionAppid = id
 
         artworkSelectionProcess.start(
             "python3",

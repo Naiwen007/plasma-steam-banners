@@ -22,6 +22,7 @@ PlasmoidItem {
     property bool searchOpen: false
     property string storeFilter: ""
     property int artworkChooserAppid: 0
+    property var artworkChooserGame: null
     property string artworkChooserType: ""
     property string artworkChooserMessage: ""
 
@@ -226,20 +227,20 @@ PlasmoidItem {
         }
 
         onArtworkSelectionFinished: function(
-            appid,
+            game,
             artworkType,
             path
         ) {
             heroChooserPopup.close()
 
             gameGrid.setArtworkOverride(
-                appid,
+                game,
                 artworkType,
                 path
             )
 
             gameGrid.setManualArtworkSelection(
-                appid,
+                game,
                 artworkType,
                 true
             )
@@ -1429,8 +1430,18 @@ PlasmoidItem {
                 root.launchGame(game)
             }
 
-            onRefreshArtworkRequested: function(appid) {
-                scanner.scanGame(appid)
+            onRefreshArtworkRequested: function(game) {
+                if (
+                    !game
+                    || game.appid === undefined
+                    || game.appid === null
+                ) {
+                    return
+                }
+
+                scanner.scanGame(
+                    game.appid
+                )
             }
 
             searchText:
@@ -1465,26 +1476,62 @@ PlasmoidItem {
                 }
             }
 
-            onChooseHeroRequested: function(appid) {
+            onChooseHeroRequested: function(game) {
+                if (
+                    !game
+                ) {
+                    return
+                }
+
                 root.artworkChooserType = "hero"
-                scanner.loadArtworkOptions(appid)
+                root.artworkChooserGame = game
+
+                scanner.loadArtworkOptions(
+                    game
+                )
             }
 
-            onChooseLogoRequested: function(appid) {
+            onChooseLogoRequested: function(game) {
+                if (
+                    !game
+                ) {
+                    return
+                }
+
                 root.artworkChooserType = "logo"
-                scanner.loadArtworkOptions(appid)
+                root.artworkChooserGame = game
+
+                scanner.loadArtworkOptions(
+                    game
+                )
             }
 
-            onClearHeroSelectionRequested: function(appid) {
+            onClearHeroSelectionRequested: function(game) {
+                if (
+                    !game
+                    || game.appid === undefined
+                    || game.appid === null
+                ) {
+                    return
+                }
+
                 scanner.clearArtworkSelection(
-                    appid,
+                    game.appid,
                     "hero"
                 )
             }
 
-            onClearLogoSelectionRequested: function(appid) {
+            onClearLogoSelectionRequested: function(game) {
+                if (
+                    !game
+                    || game.appid === undefined
+                    || game.appid === null
+                ) {
+                    return
+                }
+
                 scanner.clearArtworkSelection(
-                    appid,
+                    game.appid,
                     "logo"
                 )
             }
@@ -1801,7 +1848,7 @@ PlasmoidItem {
                                     root.artworkChooserMessage = ""
 
                                     scanner.selectArtwork(
-                                        root.artworkChooserAppid,
+                                        root.artworkChooserGame,
                                         root.artworkChooserType,
                                         modelData
                                     )
